@@ -6,7 +6,8 @@ import numpy as np
 import time
 import math
 
-from collections import namedtuple
+from maximumIndependentSet import MaximumIndependentSet
+from collections import defaultdict
 from occupancyGrid import OccupancyGrid
 from enum import Enum
 
@@ -30,13 +31,31 @@ class Point:
   def __repr__(self):
     return 'Point({})'.format(str(self))
 
+  def shift(self, direction):
+    if direction == Direction.UP:
+      return Point(self.x, self.y - 1)
+
+    elif direction == Direction.DOWN:
+      return Point(self.x, self.y + 1)
+
+    elif direction == Direction.LEFT:
+      return Point(self.x - 1, self.y)
+
+    elif direction == Direction.RIGHT:
+      return Point(self.x + 1, self.y)
+
 class Direction(Enum):
   # Used for rectangular submaps
   UP = -1
   DOWN = -2
   LEFT = -3
   RIGHT = -4
+
+  # Special is used for an edge case involving corners
   SPECIAL = -5
+  
+  # Intersection is used for when two marked edges intersect
+  INTERSECTION = -6
 
   def next(self):
     if self.name == "UP":
@@ -48,7 +67,7 @@ class Direction(Enum):
     elif self.name == "RIGHT":
       return Direction.DOWN
     else:
-      return Direction.SPECIAL
+      return self
 
   def opposite(self):
     if self.name == "UP":
@@ -60,7 +79,8 @@ class Direction(Enum):
     elif self.name == "RIGHT":
       return Direction.LEFT
     else:
-      return Direction.SPECIAL
+      return self
+
 
 class Submap:
   def __init__(self, corners):
@@ -227,17 +247,23 @@ def getCorners(occ_grid):
   
   return corners
 
-def getCogridCorners(corners, occ_grid):
+def seperateCorners(corners, occ_grid):
+  '''
+  Returns all pairs of points in corners that are cogrid, i.e. that lie along the same x or y line. The result
+  is split into two lists vertical pairs and horizontal pairs.
+  '''
+
   # Naive O(n^2) implementation
   # Could be improved via sorting
+  has_cogrid_pair = [False] * len(corners)
 
-  pairs = []
-  unique_points = set()
+  vertical_pairs = []
+  horizontal_pairs = []
 
   # Iterate through all points to find cogrid vertices. Need to ensure a clear line exists between the two points
   for a in range(len(corners) - 1):
     for b in range(a + 1, len(corners)):
-      if corners[a].x == corners[b].x: 
+      if corners[a].x == corners[b].x:
 
         # Check there is an uniterrupted line between the two points
         start = min(corners[a].y, corners[b].y)
@@ -252,10 +278,9 @@ def getCogridCorners(corners, occ_grid):
         
         # If the two points form a valid cogrid pair then add to our result
         if isValid:
-          pairs.append((corners[a], corners[b]))
-
-          unique_points.add(corners[a])
-          unique_points.add(corners[b])
+          vertical_pairs.append((corners[a], corners[b]))
+          has_cogrid_pair[a] = True
+          has_cogrid_pair[b] = True
         
       elif corners[a].y == corners[b].y:
 
@@ -272,38 +297,213 @@ def getCogridCorners(corners, occ_grid):
 
         # If the two points form a valid cogrid pair then add to our result
         if isValid:
-          pairs.append((corners[a], corners[b]))
+          horizontal_pairs.append((corners[a], corners[b]))
 
-          unique_points.add(corners[a])
-          unique_points.add(corners[b])
+          has_cogrid_pair[a] = True
+          has_cogrid_pair[b] = True
 
-  return pairs, len(unique_points)
+  
+  remaining_corners = [concave_corners[i] for i in range(len(concave_corners)) if has_cogrid_pair[i] == False]
+
+  return vertical_pairs, horizontal_pairs, remaining_corners
+
+def getEdgeDirection(x, y, occ_grid):
+
+  # [top, left, bottom, right]
+  occupied = getNhoodOccupancy(x, y, occ_grid)
+
+  # Take first free direction rather than random dir
+  direction = occupied.index(False)
+
+  # Check what to mark the cell as based on whats around it
+  check_idx = (direction - 1) % 4
+
+  if occupied[check_idx]:
+    if check_idx == 0:
+      return Direction.LEFT
+      
+    elif check_idx == 1:
+      return Direction.DOWN
+
+    elif check_idx == 3:
+      return Direction.UP
+
+    else:
+      # The case where check_idx is 2 should never occur because we always choose the first unoccupied in CCW direction
+      print("ERROR")
+      exit() # TODO:
+
+  # An edge case occurs when the cells above the corner and to the right of the corner are unoccupied
+  elif occupied[(direction + 1) % 4]:
+    return Direction.SPECIAL
 
 def markEdge(x, y, direction, occ_grid):
-  if direction == Direction.UP:
-    while y >= 0 and occ_grid[x, y] == 0:
-      occ_grid[x, y] = Direction.UP.value
-      y -= 1
+
+  cur_point = Point(x, y)
+
+  if direction == Direction.SPECIAL:
+
+    # Move upwards
+    direction = Direction.UP
+    cur_point = cur_point.shift(direction)
+
+    # Occurs if another edge runs over this one
+    if occ_grid[cur_point.x, cur_point.y] < 0:
+      return False
+
+    while occ_grid.inBounds(cur_point.x, cur_point.y) and occ_grid[cur_point.x, cur_point.y] == 0:
+      # But mark the cell with down
+      occ_grid[cur_point.x, cur_point.y] = direction.opposite().value
+      cur_point = cur_point.shift(direction)
+
+    # TODO:
+    if occ_grid.inBounds(cur_point.x, cur_point.y) and occ_grid[cur_point.x, cur_point.y] == direction.next().value:
+      occ_grid[cur_point.x, cur_point.y] = Direction.INTERSECTION.value
+
+  else:
+    cur_point = cur_point.shift(direction)
+
+    # Occurs if another edge runs over this one
+    if occ_grid[cur_point.x, cur_point.y] < 0:
+      return False
+
+    while occ_grid.inBounds(cur_point.x, cur_point.y) and occ_grid[cur_point.x, cur_point.y] == 0:
+      occ_grid[cur_point.x, cur_point.y] = direction.value
+      cur_point = cur_point.shift(direction)
+
+    # TODO:
+    if occ_grid.inBounds(cur_point.x, cur_point.y) and occ_grid[cur_point.x, cur_point.y] == direction.next().value:
+      occ_grid[cur_point.x, cur_point.y] = Direction.INTERSECTION.value
+
+  return True
+
+def markCogrid(x1, y1, x2, y2, vertical_line, occ_grid):
+  occupied_1 = getNhoodOccupancy(x1, y1, occ_grid)
+  occupied_2 = getNhoodOccupancy(x2, y2, occ_grid)
+
+  # Right rotate occupied_1
+  right_rotate = occupied_1[-1:] + occupied_1[:-1]
+
+  # Left rotate occupied_1
+  left_rotate = occupied_1[1:] + occupied_1[:1]
+
+  if right_rotate == occupied_2:
+    if vertical_line:
+      # Start from top most point and move down
+      start = Point(x1, min(y1, y2))
+      markEdge(start.x, start.y, Direction.DOWN, occ_grid)
+
+      # Return the start point shifted one (so that it is the corner of the rectangle)
+      return [start.shift(Direction.DOWN)]
+
+    else:
+      # Start from left most point and move right
+      start = Point(min(x1, x2), y1)
+      markEdge(start.x, start.y, Direction.RIGHT, occ_grid)
+
+      return [start.shift(Direction.RIGHT)]
   
-  elif direction == Direction.DOWN:
-    while y < occ_grid.size_y and occ_grid[x, y] == 0:
-      occ_grid[x, y] = Direction.DOWN.value
-      y += 1
+  elif left_rotate == occupied_2:
+    if vertical_line:
+      # Start from bottom most point and move up
+      start = Point(x1, max(y1, y2))
+      markEdge(start.x, start.y, Direction.UP, occ_grid)
 
-  elif direction == Direction.LEFT:
-    while x >= 0 and occ_grid[x, y] == 0:
-      occ_grid[x, y] = Direction.LEFT.value
-      x -= 1
+      return [start.shift(Direction.UP)]
 
-  elif direction == Direction.RIGHT:
-    while x < occ_grid.size_x and occ_grid[x, y] == 0:
-      occ_grid[x, y] = Direction.RIGHT.value
-      x += 1
+    else:
+      # Start from right most point and move left
+      start = Point(max(x1, x2), y1)
+      markEdge(start.x, start.y, Direction.LEFT, occ_grid)
 
-  elif direction == Direction.SPECIAL:
-    while y >= 0 and occ_grid[x, y] == 0:
-      occ_grid[x, y] = Direction.DOWN.value
-      y -= 1
+      return [start.shift(Direction.LEFT)]
+
+  
+  elif occupied_1 == occupied_2[::-1]:
+    '''
+    If we reach here it means we have two corners whose leading edge move in opposite directions i.e.
+        |                     |
+      --+     +--   or      --+
+              |                     
+                              +--
+                              |
+    '''
+
+    if vertical_line:
+      downward_start_point = Point(x1 - 1, min(y1,y2))
+      upward_start_point = Point(x1 + 1, max(y1, y2))
+
+      markEdge(downward_start_point.x, downward_start_point.y, Direction.DOWN, occ_grid)
+      markEdge(upward_start_point.x, upward_start_point.y, Direction.UP, occ_grid)
+
+      return [downward_start_point.shift(Direction.DOWN), upward_start_point.shift(Direction.UP)]
+
+    else:      
+      # For this case with horizontal lines, the edge ends on the corner rather than beginning at it thus we need to run markEdge backwards
+      leftward_end_point = Point(min(x1, x2), y1 - 1)
+      rightward_end_point = Point(max(x1, x2), y1 + 1)
+
+      # Get the start points of the edge (using the end_point will double add a corner during the rectangle phase)
+      result = []
+
+      cur_point = leftward_end_point.shift(Direction.RIGHT)
+      while occ_grid.inBounds(cur_point.x, cur_point.y) and occ_grid[cur_point.x, cur_point.y] == 0:
+        occ_grid[cur_point.x, cur_point.y] = Direction.LEFT.value
+        cur_point = cur_point.shift(Direction.RIGHT)
+
+      result.append(cur_point.shift(Direction.LEFT))
+
+      cur_point = rightward_end_point.shift(Direction.LEFT)
+      while occ_grid.inBounds(cur_point.x, cur_point.y) and occ_grid[cur_point.x, cur_point.y] == 0:
+        occ_grid[cur_point.x, cur_point.y] = Direction.RIGHT.value
+        cur_point = cur_point.shift(Direction.LEFT)
+
+      result.append(cur_point.shift(Direction.RIGHT))
+
+      return result
+
+  else:
+    '''
+    Same case as above except the edges are flipped i.e.
+              |             |
+      --+     +--   or      +--
+        |                          
+                          --+
+                            |
+    '''
+
+    if vertical_line:
+      # For this case with vertical lines, the edge ends on the corner rather than beginning at it thus we need to run the mark edge backwards
+      upward_end_point = Point(x1 + 1, min(y1, y2))
+      downward_end_point = Point(x1 - 1, max(y1, y2))
+
+      # Get the start points of the edge (using the end_point will double add a corner during the rectangle phase)
+      result = []
+
+      cur_point = upward_end_point.shift(Direction.DOWN)
+      while occ_grid.inBounds(cur_point.x, cur_point.y) and occ_grid[cur_point.x, cur_point.y] == 0:
+        occ_grid[cur_point.x, cur_point.y] = Direction.UP.value
+        cur_point = cur_point.shift(Direction.DOWN)
+
+      result.append(cur_point.shift(Direction.UP))
+
+      cur_point = downward_end_point.shift(Direction.UP)
+      while occ_grid.inBounds(cur_point.x, cur_point.y) and occ_grid[cur_point.x, cur_point.y] == 0:
+        occ_grid[cur_point.x, cur_point.y] = Direction.DOWN.value
+        cur_point = cur_point.shift(Direction.UP)
+
+      result.append(cur_point.shift(Direction.DOWN))
+
+      return result
+
+    else:
+      leftward_initial_point = Point(max(x1, x2), y1 - 1)
+      rightward_initial_point = Point(min(x1, x2), y1 + 1)
+
+      markEdge(leftward_initial_point.x, leftward_initial_point.y, Direction.LEFT, occ_grid)
+      markEdge(rightward_initial_point.x, rightward_initial_point.y, Direction.RIGHT, occ_grid)
+
+      return [leftward_initial_point.shift(Direction.LEFT), rightward_initial_point.shift(Direction.RIGHT)]
 
 def makeRectangle(x, y, possible_rectangles, occ_grid):
   '''
@@ -313,16 +513,11 @@ def makeRectangle(x, y, possible_rectangles, occ_grid):
   occur first before an upwards edge, i.e. only a LEFT edge will be split by an UP edge not vice-versa.
   '''
 
-  shift = {
-      Direction.UP : Point(0, -1), 
-      Direction.DOWN : Point(0, 1), 
-      Direction.LEFT : Point(-1, 0), 
-      Direction.RIGHT : Point(1, 0)}
-  
   initial_point = Point(x,y)
 
   cur_dir = Direction(occ_grid[x, y])
-  cur_point = initial_point + shift[cur_dir]
+  cur_point = initial_point
+  cur_point = cur_point.shift(cur_dir)
 
   rectangle_corners = [initial_point]
 
@@ -331,7 +526,8 @@ def makeRectangle(x, y, possible_rectangles, occ_grid):
   # Check the edge case where we start on a special corner
   if cur_dir == Direction.DOWN and occ_grid[cur_point.x, cur_point.y] == 1:
     cur_dir = Direction.LEFT
-    cur_point = initial_point + shift[cur_dir]
+    cur_point = initial_point
+    cur_point = cur_point.shift(cur_dir)
 
   while cur_point != initial_point:
 
@@ -344,67 +540,111 @@ def makeRectangle(x, y, possible_rectangles, occ_grid):
       print(rectangle_corners)
       exit()
 
-    # TODO: Check that the cells we go over arent part of potential rectangles
-
     # Check that the current point is in bounds
     if occ_grid.inBounds(cur_point.x, cur_point.y):
       cell_value = occ_grid[cur_point.x, cur_point.y]
 
     # Otherwise backtrack, change direction and mark the point as a corner in the rectangle
     else:
-      cur_point += shift[cur_dir.opposite()]
+      cur_point = cur_point.shift(cur_dir.opposite())
       cur_dir = cur_dir.next()
       rectangle_corners.append(cur_point)
 
       # Move in new direction so that we dont have issues with the error checking steps below
-      cur_point += shift[cur_dir]
+      cur_point = cur_point.shift(cur_dir)
 
       # Go to next iteration
       continue
-
+    
     # print(cur_point, end="--- ")
     # print(cell_value)
 
     # If we hit a cell that has 0 or the current direction then we continue moving in same direction
     if cell_value == 0 or cell_value == cur_dir.value:
-      cur_point += shift[cur_dir]
+      cur_point = cur_point.shift(cur_dir)
 
-    # If we encounter a cell that tells us to change direction and is correct then follow the new direction
+    # If we encounter an a cell with the next direction then add the corner and follow the next direction
     elif cell_value == cur_dir.next().value:
       # Move with new direction
       cur_dir = cur_dir.next()
       rectangle_corners.append(cur_point)
 
+      cur_point = cur_point.shift(cur_dir)
+
+    # If we encounter an intersection check the value in the next direction after the intersection.
+    elif cell_value == Direction.INTERSECTION.value:
+      cur_dir = cur_dir.next()
+      potential_corner = cur_point
+      cur_point = cur_point.shift(cur_dir)
+
+      if occ_grid[cur_point.x, cur_point.y] == cur_dir.value:
+        rectangle_corners.append(potential_corner)
+
+      # TODO: Test and remove
+      elif occ_grid[cur_point.x, cur_point.y] == 0:
+        print("UNEXPECTED")
+        exit()
+      else:
+        potential_corner = potential_corner.shift(cur_dir.next())
+        rectangle_corners.append(potential_corner)
+        cur_point = potential_corner.shift(cur_dir)
+
+
     # If we hit an obstacle (i.e. 1) or other marked cell then backtrack, change direction and mark point as a corner in the rectangle
     else:
-      cur_point += shift[cur_dir.opposite()]
+      cur_point = cur_point.shift(cur_dir.opposite())
       cur_dir = cur_dir.next()
 
       rectangle_corners.append(cur_point)
 
       # Move in new direction so that we dont have issues with the error checking steps
-      cur_point += shift[cur_dir]
+      cur_point = cur_point.shift(cur_dir)
   
-
   return Submap(rectangle_corners)
+
+def splitIntoRectangles(concave_corners, occ_grid):
+  '''
+  Given a list of concave corner points, splits the occ_grid into rectangles. Returns a list of points that are the corners of unique rectangles and
+  a set of points that lie on the edges of other potential rectangles that were missed. For any split it can create either 1 or 2 rectangles, thus
+  the set is used to keep track of extra rectangles.
+  '''
+  
+  definite_rectangles = []
+  possible_rectangles = set()
+
+  for corner in concave_corners:
+    direction = getEdgeDirection(corner.x, corner.y, occ_grid)
+    suitable_edge = markEdge(corner.x, corner.y, direction, occ_grid)
+
+    if not suitable_edge:
+      continue
+
+    # Based on the direction of the edge add the corner of the rectangle as well as the adjacent rectangle
+    if direction == Direction.SPECIAL:
+      definite_rectangles.append(corner.shift(Direction.UP))
+
+      # Offset contains the previous shift
+      possible_rectangles.add(corner.shift(Direction.RIGHT))
+    else:
+      definite_rectangles.append(corner.shift(direction))
+
+      # Offset contains the previous shift
+      possible_rectangles.add(corner.shift(direction.next().opposite()))
+
+  return definite_rectangles, possible_rectangles
+
     
 def extractSubmaps(definite_rectangles, possible_rectangles, occ_grid):
   submaps = []
   used_corners = set()
 
-  shift = {
-      Direction.UP : Point(0, -1), 
-      Direction.DOWN : Point(0, 1), 
-      Direction.LEFT : Point(-1, 0), 
-      Direction.RIGHT : Point(1, 0)}
-
-  # STEP 1: Iterate through the known to be rectangles
+  # STEP 1: Iterate through the points known to be rectangle corners
   for num, corner in enumerate(definite_rectangles):
 
     # Skip this corner if it has been used in another rectangle
     if corner in used_corners:
       continue
-
+    
     submap = makeRectangle(corner.x, corner.y, possible_rectangles, occ_grid)
 
     # Add the corners of this submap into the used corners set
@@ -434,7 +674,7 @@ def extractSubmaps(definite_rectangles, possible_rectangles, occ_grid):
 
       # Need to move to the closest corner
       while occupied.count(0) != 2:
-        cell += shift[direction_of_corner]
+        cell = cell.shift(direction_of_corner)
         occupied = getNhoodValues(cell.x, cell.y, occ_grid)
 
       direction_of_corner = direction_of_corner.next()
@@ -448,23 +688,23 @@ def extractSubmaps(definite_rectangles, possible_rectangles, occ_grid):
         direction_of_corner = Direction.UP
       elif occupied[2] and occupied[3]:
         direction_of_corner = Direction.LEFT
-
-    if direction_of_corner == None:
-      print(occupied)
+    
+    # if direction_of_corner == None:
+    #   print(occupied)
 
     # Set the cell to have the correct direction and then make a submap
     occ_grid[cell.x, cell.y] = direction_of_corner.value
     submaps.append(makeRectangle(cell.x, cell.y, possible_rectangles, occ_grid))
 
-  # # Visualization
-  # for num, submap in enumerate(submaps):
-  #   for (x, y) in submap.range():
-  #     occ_grid[x, y] = num + 10
+  # Visualization
+  for num, submap in enumerate(submaps):
+    for (x, y) in submap.range():
+      occ_grid[x, y] = num + 10
 
   return submaps
 
 # Get Scene
-SCENE_FILE = join(dirname(abspath(__file__)), 'scenes/scene_cogrid_test.ttt')
+SCENE_FILE = join(dirname(abspath(__file__)), 'scenes/scene_cogrid_aligned.ttt')
 
 # Set numpy printing options
 np.set_printoptions(threshold=(100*100), formatter={'all':lambda x: str(x) + ','})
@@ -484,103 +724,131 @@ setupOccGrid(occ_grid, vision_sensor)
 pr.step()
 concave_corners = getCorners(occ_grid)
 
-cogrid_corners, number_of_unique_points = getCogridCorners(concave_corners, occ_grid)
+# TODO: Manage the case where points are off by one
+# TODO: Manage the case where points are on same line
+vertical_cogrid, horizontal_cogrid, noncogrid_corners = seperateCorners(concave_corners, occ_grid)
 
-# Create an adjacency matrix
-cogrid_graph = np.zeros((number_of_unique_points, number_of_unique_points))
+bipartite_graph = defaultdict(list)
+isolated_vertical = []
+isolated_horizontal = []
 
-#TODO: Get Maximal independent set of cogrid
-
-# Create a temp_occ_grid to use for the marking in finding the cogrid
+# Create a temp_occ_grid to use for faster construction of the bipartite graph (if we use occ_grid it will leave remnants which we dont want)
 temp_occ_grid = occ_grid.clone()
 
-# Construct the graph
-for num, (point_1, point_2) in enumerate(cogrid_corners, 2):
+# Mark the vertical cogrid lines
+for num, (point_1, point_2) in enumerate(vertical_cogrid, 2):
 
-  line = []
+  # Find start and end points
+  start_y = min(point_1.y, point_2.y)
+  end_y = max(point_1.y, point_2.y)
 
-  # x is constant
-  if point_1.x == point_2.x:
-    start_y = min(point_1.y, point_2.y)
-    end_y = max(point_1.y, point_2.y)
+  # Mark the cells from start to end with num
+  for i in range(start_y, end_y + 1):
+    temp_occ_grid[point_1.x, i] = num
+  
+# Mark horizontal cogrid lines and build the bipartite graph
+for num, (point_1, point_2) in enumerate(horizontal_cogrid, 2 + len(vertical_cogrid)):
+  
+  independent_node = True
 
-    for i in range(start_y, end_y + 1):
-      val = int(temp_occ_grid[point_1.x, i])
+  # Find start and end poitns
+  start_x = min(point_1.x, point_2.x)
+  end_x = max(point_1.x, point_2.x)
 
-      if val > 1:
-        # subtract 2 since we are using the interval [2,..] for the numbers
-        cogrid_graph[val - 2, num - 2] = 1
-        cogrid_graph[num - 2, val - 2] = 1
+  for i in range(start_x, end_x + 1):
+    val = int(temp_occ_grid[i, point_1.y])
 
-      temp_occ_grid[point_1.x, i] = num
+    if val > 1:
+      independent_node = False
+      bipartite_graph[val].append(num)
 
-  # y is constant
+    temp_occ_grid[i, point_1.y] = num
+
+  # Keep track of the point if it is not part of the graph
+  if independent_node:
+    isolated_horizontal.append((point_1, point_2))
+
+for num, pair in enumerate(vertical_cogrid, 2):
+  if num not in bipartite_graph:
+    isolated_vertical.append(pair)
+
+
+
+MIS = MaximumIndependentSet(bipartite_graph)
+MIS.compute()
+# print(bipartite_graph)
+
+# print(vertical_cogrid)
+# print(horizontal_cogrid)
+# print(MIS.pairs)
+# print(MIS.max_independent_set)
+# print(MIS.min_vertex_cover)
+
+rect = []
+used_points = set()
+
+# Mark the corners that are part of the MIS
+for num in MIS.max_independent_set:
+  idx = num - 2
+
+  rect_corner = None
+
+  if idx < len(vertical_cogrid):
+    point_1, point_2 = vertical_cogrid[idx]
+    rect_corner = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, True, occ_grid)
+
+    used_points.add(point_1)
+    used_points.add(point_2)
+
   else:
-    start_x = min(point_1.x, point_2.x)
-    end_x = max(point_1.x, point_2.x)
+    idx -= len(vertical_cogrid)
+    point_1, point_2 = horizontal_cogrid[idx]
+    rect_corner = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, False, occ_grid)
 
-    for i in range(start_x, end_x + 1):
-      val = int(temp_occ_grid[i, point_1.y])
+    used_points.add(point_1)
+    used_points.add(point_2)
 
-      if val > 1:
-        # subtract 2 since we are using the interval [2,..] for the numbers
-        cogrid_graph[val - 2, num - 2] = 1
-        cogrid_graph[num - 2, val - 2] = 1
+  rect.extend(rect_corner)
 
-      temp_occ_grid[i, point_1.y] = num
+for num in MIS.min_vertex_cover:
+  idx = num - 2
 
+  if idx < len(vertical_cogrid):
+    point_1, point_2 = vertical_cogrid[idx]
+    
+    if point_1 not in used_points:
+      noncogrid_corners.append(point_1)
+    
+    if point_2 not in used_points:
+      noncogrid_corners.append(point_2)
 
-# print(temp_occ_grid)
-print(cogrid_graph)
-print(cogrid_corners)
+  else:
+    idx -= len(vertical_cogrid)
+    point_1, point_2 = horizontal_cogrid[idx]
 
+    if point_1 not in used_points:
+      noncogrid_corners.append(point_1)
+    
+    if point_2 not in used_points:
+      noncogrid_corners.append(point_2)
 
-# definite_rectangles = []
-# possible_rectangles = set()
+# Mark cogrid corners that were not included in the bipartite graph
+for (point_1, point_2) in isolated_vertical:
+  rect_corner = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, True, occ_grid)
+  rect.extend(rect_corner)
 
-# # Mark the Rectangles
-# for corner in concave_corners:
+for (point_1, point_2) in isolated_horizontal:
+  rect_corner = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, False, occ_grid)
+  rect.extend(rect_corner)
 
-#   occupied = getNhoodOccupancy(corner.x, corner.y, occ_grid)
+# TODO: remove the corners used in the cogriding from those that are made into rectangles
+definite_rectangles, possible_rectangles = splitIntoRectangles(noncogrid_corners, occ_grid)
 
-#   # Take first free direction rather than random dir
-#   direction = occupied.index(False)
+definite_rectangles.extend(rect)
 
-#   # Check what to mark the cell as based on whats around it
-#   check_idx = (direction - 1) % 4
-
-#   if occupied[check_idx]:
-#     if check_idx == 0:
-#       markEdge(corner.x - 1, corner.y, Direction.LEFT, occ_grid)
-
-#       definite_rectangles.append(Point(corner.x - 1, corner.y))
-#       possible_rectangles.add(Point(corner.x - 1, corner.y + 1))
-      
-#     elif check_idx == 1:
-#       markEdge(corner.x, corner.y + 1, Direction.DOWN, occ_grid)
-
-#       definite_rectangles.append(Point(corner.x, corner.y + 1))
-#       possible_rectangles.add(Point(corner.x + 1, corner.y + 1))
-
-#     elif check_idx == 3:
-#       markEdge(corner.x, corner.y - 1, Direction.UP, occ_grid)
-
-#       definite_rectangles.append(Point(corner.x, corner.y - 1))
-#       possible_rectangles.add(Point(corner.x - 1, corner.y - 1))
-
-#     else:
-#       # The case where check_idx is 2 should never occur because we always choose the first unoccupied in CCW direction
-#       print("ERROR")
-#       exit() # TODO:
-
-#   elif occupied[(direction + 1) % 4]:
-#     markEdge(corner.x, corner.y - 1, Direction.SPECIAL, occ_grid)
-
-#     definite_rectangles.append(Point(corner.x, corner.y - 1))
-#     possible_rectangles.add(Point(corner.x + 1, corner.y - 1))
-
-# submaps = extractSubmaps(definite_rectangles, possible_rectangles, occ_grid)
-
+submaps = extractSubmaps(definite_rectangles, possible_rectangles, occ_grid)
+print(occ_grid)
+# print(submaps[0].corners)
 # print(occ_grid)
 
 # End Simulation
