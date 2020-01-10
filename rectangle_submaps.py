@@ -393,15 +393,17 @@ def markCogrid(x1, y1, x2, y2, vertical_line, occ_grid):
       start = Point(x1, min(y1, y2))
       markEdge(start.x, start.y, Direction.DOWN, occ_grid)
 
-      # Return the start point shifted one (so that it is the corner of the rectangle)
-      return [start.shift(Direction.DOWN)]
+      # Return the start point shifted one (so that it is the corner of the rectangle) as well as an adjacent tile (that forms a potential rectangle)
+      rect_corner = start.shift(Direction.DOWN)
+      return [rect_corner], [rect_corner.shift(Direction.RIGHT)]
 
     else:
       # Start from left most point and move right
       start = Point(min(x1, x2), y1)
       markEdge(start.x, start.y, Direction.RIGHT, occ_grid)
 
-      return [start.shift(Direction.RIGHT)]
+      rect_corner = start.shift(Direction.RIGHT)
+      return [rect_corner], [rect_corner.shift(Direction.UP)]
   
   elif left_rotate == occupied_2:
     if vertical_line:
@@ -409,14 +411,17 @@ def markCogrid(x1, y1, x2, y2, vertical_line, occ_grid):
       start = Point(x1, max(y1, y2))
       markEdge(start.x, start.y, Direction.UP, occ_grid)
 
-      return [start.shift(Direction.UP)]
+      rect_corner = start.shift(Direction.UP)
+      return [rect_corner], [rect_corner.shift(Direction.LEFT)]
 
     else:
       # Start from right most point and move left
       start = Point(max(x1, x2), y1)
       markEdge(start.x, start.y, Direction.LEFT, occ_grid)
 
-      return [start.shift(Direction.LEFT)]
+
+      rect_corner = start.shift(Direction.LEFT)
+      return [rect_corner], [rect_corner.shift(Direction.DOWN)]
 
   
   elif occupied_1 == occupied_2[::-1]:
@@ -436,7 +441,8 @@ def markCogrid(x1, y1, x2, y2, vertical_line, occ_grid):
       markEdge(downward_start_point.x, downward_start_point.y, Direction.DOWN, occ_grid)
       markEdge(upward_start_point.x, upward_start_point.y, Direction.UP, occ_grid)
 
-      return [downward_start_point.shift(Direction.DOWN), upward_start_point.shift(Direction.UP)]
+      # TODO: Include the 1 line that forms between rectangles in possible_rect?
+      return [downward_start_point.shift(Direction.DOWN), upward_start_point.shift(Direction.UP)], []
 
     else:      
       # For this case with horizontal lines, the edge ends on the corner rather than beginning at it thus we need to run markEdge backwards
@@ -460,7 +466,7 @@ def markCogrid(x1, y1, x2, y2, vertical_line, occ_grid):
 
       result.append(cur_point.shift(Direction.RIGHT))
 
-      return result
+      return result, []
 
   else:
     '''
@@ -494,7 +500,7 @@ def markCogrid(x1, y1, x2, y2, vertical_line, occ_grid):
 
       result.append(cur_point.shift(Direction.DOWN))
 
-      return result
+      return result, []
 
     else:
       leftward_initial_point = Point(max(x1, x2), y1 - 1)
@@ -503,7 +509,7 @@ def markCogrid(x1, y1, x2, y2, vertical_line, occ_grid):
       markEdge(leftward_initial_point.x, leftward_initial_point.y, Direction.LEFT, occ_grid)
       markEdge(rightward_initial_point.x, rightward_initial_point.y, Direction.RIGHT, occ_grid)
 
-      return [leftward_initial_point.shift(Direction.LEFT), rightward_initial_point.shift(Direction.RIGHT)]
+      return [leftward_initial_point.shift(Direction.LEFT), rightward_initial_point.shift(Direction.RIGHT)], []
 
 def makeRectangle(x, y, possible_rectangles, occ_grid):
   '''
@@ -580,10 +586,6 @@ def makeRectangle(x, y, possible_rectangles, occ_grid):
       if occ_grid[cur_point.x, cur_point.y] == cur_dir.value:
         rectangle_corners.append(potential_corner)
 
-      # TODO: Test and remove
-      elif occ_grid[cur_point.x, cur_point.y] == 0:
-        print("UNEXPECTED")
-        exit()
       else:
         potential_corner = potential_corner.shift(cur_dir.next())
         rectangle_corners.append(potential_corner)
@@ -784,7 +786,8 @@ MIS.compute()
 # print(MIS.max_independent_set)
 # print(MIS.min_vertex_cover)
 
-rect = []
+cogrid_definite_rect = []
+cogrid_possible_rect = []
 used_points = set()
 
 # Mark the corners that are part of the MIS
@@ -792,10 +795,11 @@ for num in MIS.max_independent_set:
   idx = num - 2
 
   rect_corner = None
+  possible_rect = None
 
   if idx < len(vertical_cogrid):
     point_1, point_2 = vertical_cogrid[idx]
-    rect_corner = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, True, occ_grid)
+    rect_corner, possible_rect = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, True, occ_grid)
 
     used_points.add(point_1)
     used_points.add(point_2)
@@ -803,12 +807,13 @@ for num in MIS.max_independent_set:
   else:
     idx -= len(vertical_cogrid)
     point_1, point_2 = horizontal_cogrid[idx]
-    rect_corner = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, False, occ_grid)
+    rect_corner, possible_rect = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, False, occ_grid)
 
     used_points.add(point_1)
     used_points.add(point_2)
 
-  rect.extend(rect_corner)
+  cogrid_definite_rect.extend(rect_corner)
+  cogrid_possible_rect.extend(possible_rect)
 
 for num in MIS.min_vertex_cover:
   idx = num - 2
@@ -834,17 +839,22 @@ for num in MIS.min_vertex_cover:
 
 # Mark cogrid corners that were not included in the bipartite graph
 for (point_1, point_2) in isolated_vertical:
-  rect_corner = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, True, occ_grid)
-  rect.extend(rect_corner)
+  rect_corner, possible_rect = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, True, occ_grid)
+
+  cogrid_definite_rect.extend(rect_corner)
+  cogrid_possible_rect.extend(possible_rect)
 
 for (point_1, point_2) in isolated_horizontal:
-  rect_corner = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, False, occ_grid)
-  rect.extend(rect_corner)
+  rect_corner, possible_rect = markCogrid(point_1.x, point_1.y, point_2.x, point_2.y, False, occ_grid)
+  
+  cogrid_definite_rect.extend(rect_corner)
+  cogrid_possible_rect.extend(possible_rect)
 
-# TODO: remove the corners used in the cogriding from those that are made into rectangles
+
 definite_rectangles, possible_rectangles = splitIntoRectangles(noncogrid_corners, occ_grid)
 
-definite_rectangles.extend(rect)
+definite_rectangles.extend(cogrid_definite_rect)
+possible_rectangles.update(cogrid_possible_rect)
 
 submaps = extractSubmaps(definite_rectangles, possible_rectangles, occ_grid)
 print(occ_grid)
