@@ -676,7 +676,7 @@ class GridSubmapper:
 
     for num, submap in enumerate(self.submaps):
       for (x, y) in submap.range():
-        visual_grid[x, y] = num + 5
+        visual_grid[x, y] = num + 2
 
     return visual_grid
 
@@ -766,7 +766,7 @@ class Direction(Enum):
       return self    
 
 class Submap:
-  def __init__(self, corners):
+  def __init__(self, corners : [Point]):
     # Clockwise order of corners
     self.corners = corners
 
@@ -774,6 +774,23 @@ class Submap:
     # self.centre_y = (y1 + y2)/2
     self.size_x = abs(corners[0].x - corners[2].x)
     self.size_y = abs(corners[0].y - corners[2].y)
+    
+    self.min_x = corners[0].x
+    self.min_y = corners[0].y
+
+    self.max_x = corners[0].x
+    self.max_y = corners[0].y
+
+    for p in corners:
+      if p.x < self.min_x:
+        self.min_x = p.x
+      if p.y < self.min_y:
+        self.min_y = p.y
+
+      if p.x > self.max_x:
+        self.max_x = p.x
+      if p.y > self.max_y:
+        self.max_y = p.y
 
   def range(self):
     min_x = min(self.corners, key=lambda p: p.x).x
