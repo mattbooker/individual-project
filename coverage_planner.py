@@ -3,11 +3,10 @@ from pyrep import PyRep
 from pyrep.objects.shape import Shape
 from pyrep.objects.vision_sensor import VisionSensor
 import numpy as np
-import time
-import math
 
 from occupancyGrid import OccupancyGrid
 from gridSubmapper import GridSubmapper
+from submapPlanner import SubmapPlanner
 
 
 def setupOccGrid(occ_grid, vision_sensor):
@@ -34,13 +33,13 @@ vision_sensor = VisionSensor('vision_sensor')
 
 setupOccGrid(occ_grid, vision_sensor)
 
-occ_grid.grid = np.zeros((4000, 4000))
-occ_grid.size_x = occ_grid.size_y = 4000
-
 pr.step()
 
 submapper = GridSubmapper(occ_grid)
 submapper.process()
+
+planner = SubmapPlanner()
+planner.process(submapper.submaps)
 
 # visualization_grid = submapper.visualization()
 # print(visualization_grid)
