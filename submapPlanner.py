@@ -1,13 +1,21 @@
 from intervaltree import IntervalTree
 import numpy as np
+import math
+
+from utils import Point, Pose, Direction
 
 class SubmapPlanner:
-  def __init__(self):
+  def __init__(self, occ_grid, block_size_x, block_size_y):
+
+    self.occ_grid = occ_grid
+    self.block_size_x = block_size_x
+    self.block_size_y = block_size_y
+
     self.adj_matrix = None
     self.dp_table = None
 
     self.leaf_chains = []
-    self.idx_map = dict()
+    self.idx_map = dict()  
 
   def createGraphFromSubmaps(self, submaps):
     x_intervals = IntervalTree()
@@ -206,6 +214,112 @@ class SubmapPlanner:
 
     return path
 
+  def generatePathForSubmap(self, submap):
+    # TODO:
+    # Check if block can fit in area -> block needs to be spun
+    # Check if block can perfectly sweep area -> else block needs to be spun
+    # Edge cases -> Block cant fit in area?
+
+
+    max_block_dim = max(self.block_size_x, self.block_size_y)
+    min_block_dim = min(self.block_size_x, self.block_size_y)
+
+    max_area_dim = max(submap.size_x, submap.size_y)
+    min_area_dim = min(submap.size_x, submap.size_y)
+
+    if min_area_dim < max_block_dim:
+      print("Blocked")
+
+    general_direction = None
+    start_direction = None
+
+    #TODO: Create a function that correctly sets the general direction and start direction
+    if max_area_dim == submap.size_x:
+      general_direction = Direction.DOWN
+      start_direction = Direction.RIGHT
+    else:
+      general_direction = Direction.RIGHT
+      start_direction = Direction.DOWN
+
+    rotate_90 = False
+
+    if start_direction == Direction.RIGHT or start_direction == Direction.LEFT:
+      rotate_90 = True
+
+    # TODO: Cases for different start/general directions -> change start cell
+    
+    current_cell = None
+
+    # Initial Position Calculations
+    if general_direction == Direction.UP:
+      current_cell = Point(submap.min_x + min_block_dim/2, submap.max_y - max_block_dim/2)
+    elif general_direction == Direction.DOWN:
+      current_cell = Point(submap.min_x + min_block_dim/2, submap.min_y + max_block_dim/2)
+    elif general_direction == Direction.RIGHT:
+      current_cell = Point(submap.min_x + max_block_dim/2, submap.min_y + min_block_dim/2)
+    
+
+
+    cell_path = [current_cell]
+
+    sweeps = min_area_dim / max_block_dim
+    moves_per_sweep = max_area_dim - min_block_dim + 1
+
+    current_movement = start_direction
+
+    # Boustrophedon method
+    for i in range(int(sweeps)):
+      if i % 2 == 0:
+        current_movement = start_direction
+      else:
+        current_movement = start_direction.opposite()
+
+      # Move along sweep line
+      for j in range(int(moves_per_sweep)):
+        current_cell = current_cell.shift(current_movement)
+        cell_path.append(current_cell)
+
+      # Break the loop so we dont perform the shift at the end
+      if i == int(sweeps) - 1:
+        continue
+      
+      # Shift to next sweep line
+      for k in range(max_block_dim):
+        current_cell = current_cell.shift[general_direction]
+        cell_path.append(current_cell)
+
+    if int(sweeps) != sweeps:
+      remaining = min_area_dim - (int(sweeps) * max_block_dim) + 1
+
+      # Need to move to next line and change direction if we are at the end of a sweep line
+      if sweeps >= 1:
+
+        current_movement = current_movement.opposite()
+
+        # Shift to next sweep line
+        for i in range(remaining):
+          current_cell = current_cell.shift(general_direction)
+          cell_path.append(current_cell) 
+
+      # Move along sweep line
+      for j in range(int(moves_per_sweep)):
+        current_cell = current_cell.shift(current_movement)
+        cell_path.append(current_cell)
+
+    # Convert cell path to real world path
+    path = []
+
+    for c in cell_path:
+      wx, wy = self.occ_grid.mapToWorld(c.x, c.y)
+
+      if rotate_90:
+        path.append(Pose(wx, wy, math.radians(90)))
+      else:
+        path.append(Pose(wx, wy, math.radians(0)))
+
+    return path
+
+
   def process(self, submaps):
     self.createGraphFromSubmaps(submaps)
 
@@ -225,3 +339,5 @@ class SubmapPlanner:
       
       for j in chain:
         path.insert(pos + 1, j[0])
+
+    return path
