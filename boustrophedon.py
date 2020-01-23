@@ -34,7 +34,13 @@ def set2DPose(shape, pose):
       shape.set_position([x, y, shape.get_position()[2]])
       shape.set_orientation([0, 0, yaw])
 
-def boustrophedon(block_size_x, block_size_y, area_size_x, area_size_y):
+def setupOccGrid(occ_grid, vision_sensor):
+  # Capture vision depth and create occupancy grid
+  pr.step()
+  depth = vision_sensor.capture_depth()
+  occ_grid.fromDepth(depth)
+
+def boustrophedon(block_size_x, block_size_y, area_size_x, area_size_y, occ_grid):
 
   max_block_dim = max(block_size_x, block_size_y)
   min_block_dim = min(block_size_x, block_size_y)
@@ -132,8 +138,13 @@ pr = PyRep()
 pr.launch(SCENE_FILE, headless=False)
 pr.start()
 robot = Shape('robot')
+vision_sensor = VisionSensor('vision_sensor')
 
-path = boustrophedon(20, 2, 100,100)
+# Setup occ_grid
+occ_grid = OccupancyGrid()
+setupOccGrid(occ_grid, vision_sensor)
+
+path = boustrophedon(20, 2, 100,100, occ_grid)
 
 for p in path:
   set2DPose(robot, p)
