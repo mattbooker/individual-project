@@ -3,10 +3,10 @@ import numpy as np
 class OccupancyGrid:
   occ_grid_converter = np.vectorize(lambda x : 0.0 if x >= 0.98 else 1.0)
 
-  def __init__(self):
+  def __init__(self, origin_x = -0.5, origin_y = -0.5):
     self.grid = np.zeros(1)
-    self.origin_x = -0.5
-    self.origin_y = -0.5
+    self.origin_x = origin_x
+    self.origin_y = origin_y
     self.size_x = 100
     self.size_y = 100
     self.resolution = 0.01 # m per pixel
@@ -29,7 +29,8 @@ class OccupancyGrid:
     self.grid[key[1], key[0]] = value
 
   def worldToMap(self, wx, wy):
-    return (int((round(wx+0.00001,4) - self.origin_x)/self.resolution), int((round(wy+0.00001,4) - self.origin_y)/self.resolution))
+    # return (int((round(wx+0.00001,4) - self.origin_x)/self.resolution), self.size_y - int((round(wy+0.00001,4) - self.origin_y)/self.resolution))
+    return (((wx+0.00001) - self.origin_x)//self.resolution, self.size_y - ((wy+0.00001) - self.origin_y)//self.resolution)
 
   def mapToWorld(self, mx, my):
     return (mx * self.resolution + self.origin_x, (self.size_y - 1 - my) * self.resolution + self.origin_y)
@@ -49,4 +50,3 @@ class OccupancyGrid:
       result += '\n'
 
     return result
-    # return str(self.grid)

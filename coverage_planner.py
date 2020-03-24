@@ -5,10 +5,13 @@ from pyrep.objects.vision_sensor import VisionSensor
 from pyrep.const import PrimitiveShape
 import numpy as np
 import time
+import math
 
 from occupancyGrid import OccupancyGrid
 from gridSubmapper import GridSubmapper
 from submapPlanner import SubmapPlanner
+
+from utils import Pose
 
 def setupOccGrid(occ_grid, vision_sensor):
   # Capture vision depth and create occupancy grid
@@ -51,24 +54,19 @@ submapper = GridSubmapper(occ_grid)
 submapper.process()
 
 planner = SubmapPlanner(occ_grid, 20, 2)
-planner.process(submapper.submaps)
+path = planner.process(submapper.submaps)
 
-for s in submapper.submaps:
-  path = planner.generatePathForSubmap(s)
+# for s in submapper.submaps:
+#   path = planner.generatePathForSubmap(s)
 
-  for p in path:
-    set2DPose(robot, p)
-    pr.step()
-    time.sleep(0.02)
+for p in path:
+  wx, wy = occ_grid.mapToWorld(p.x, p.y)
+  pose = Pose(wx, wy, p.theta)
+  set2DPose(robot, pose)
+  pr.step()
+  time.sleep(0.02)
 
-# path = planner.generatePathForSubmap(submapper.submaps[1])
-
-# for p in path:
-#   # print(p)
-#   set2DPose(robot, p)
-#   pr.step()
-#   time.sleep(0.05)
-
+time.sleep(1)
 # visualization_grid = submapper.visualization()
 # print(visualization_grid)
 

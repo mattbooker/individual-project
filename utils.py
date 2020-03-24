@@ -1,4 +1,5 @@
 from enum import Enum
+from math import sqrt
 
 class Pose:
   def __init__(self, x, y, theta):
@@ -16,6 +17,9 @@ class Point:
   def __init__(self, x, y):
     self.x = x
     self.y = y
+
+  def distance_to(self, rhs):
+    return sqrt((self.x + rhs.x)**2 + (self.y + rhs.y)**2)
 
   def __str__(self):
     return '{}, {}'.format(self.x, self.y)

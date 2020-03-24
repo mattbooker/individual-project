@@ -11,6 +11,8 @@ class SubmapPlanner:
     self.block_size_x = block_size_x
     self.block_size_y = block_size_y
 
+    self.cur_rot = 0
+
     self.adj_matrix = None
     self.dp_table = None
 
@@ -215,96 +217,15 @@ class SubmapPlanner:
     return path
 
   def generatePathForSubmap(self, submap):
-    # TODO:
-    # Check if block can fit in area -> block needs to be spun
-    # Check if block can perfectly sweep area -> else block needs to be spun
-    # Edge cases -> Block cant fit in area?
+    
+    # TODO: Need to figure out initial position
+    # TODO: Need to calculate overall and initial direction
 
+    cur_pos = (submap.min_x, submap.min_y)
 
-    max_block_dim = max(self.block_size_x, self.block_size_y)
-    min_block_dim = min(self.block_size_x, self.block_size_y)
-
-    max_area_dim = max(submap.size_x, submap.size_y)
-    min_area_dim = min(submap.size_x, submap.size_y)
-
-    if min_area_dim < max_block_dim:
-      print("Blocked")
-
-    general_direction = None
-    start_direction = None
-
-    #TODO: Create a function that correctly sets the general direction and start direction
-    if max_area_dim == submap.size_x:
-      general_direction = Direction.DOWN
-      start_direction = Direction.RIGHT
-    else:
-      general_direction = Direction.RIGHT
-      start_direction = Direction.DOWN
+    cell_path = self.lawnmower(cur_pos, submap.size_x, submap.size_y, )
 
     rotate_90 = False
-
-    if start_direction == Direction.RIGHT or start_direction == Direction.LEFT:
-      rotate_90 = True
-
-    # TODO: Cases for different start/general directions -> change start cell
-    
-    current_cell = None
-
-    # Initial Position Calculations
-    if general_direction == Direction.UP:
-      current_cell = Point(submap.min_x + min_block_dim/2, submap.max_y - max_block_dim/2)
-    elif general_direction == Direction.DOWN:
-      current_cell = Point(submap.min_x + min_block_dim/2, submap.min_y + max_block_dim/2)
-    elif general_direction == Direction.RIGHT:
-      current_cell = Point(submap.min_x + max_block_dim/2, submap.min_y + min_block_dim/2)
-    
-
-
-    cell_path = [current_cell]
-
-    sweeps = min_area_dim / max_block_dim
-    moves_per_sweep = max_area_dim - min_block_dim + 1
-
-    current_movement = start_direction
-
-    # Boustrophedon method
-    for i in range(int(sweeps)):
-      if i % 2 == 0:
-        current_movement = start_direction
-      else:
-        current_movement = start_direction.opposite()
-
-      # Move along sweep line
-      for j in range(int(moves_per_sweep)):
-        current_cell = current_cell.shift(current_movement)
-        cell_path.append(current_cell)
-
-      # Break the loop so we dont perform the shift at the end
-      if i == int(sweeps) - 1:
-        continue
-      
-      # Shift to next sweep line
-      for k in range(max_block_dim):
-        current_cell = current_cell.shift[general_direction]
-        cell_path.append(current_cell)
-
-    if int(sweeps) != sweeps:
-      remaining = min_area_dim - (int(sweeps) * max_block_dim) + 1
-
-      # Need to move to next line and change direction if we are at the end of a sweep line
-      if sweeps >= 1:
-
-        current_movement = current_movement.opposite()
-
-        # Shift to next sweep line
-        for i in range(remaining):
-          current_cell = current_cell.shift(general_direction)
-          cell_path.append(current_cell) 
-
-      # Move along sweep line
-      for j in range(int(moves_per_sweep)):
-        current_cell = current_cell.shift(current_movement)
-        cell_path.append(current_cell)
 
     # Convert cell path to real world path
     path = []
@@ -320,6 +241,178 @@ class SubmapPlanner:
     return path
 
 
+  def lawnmower(self, start_point, submap):
+    overall_direction, initial_direction, rotation_required = self.getSweepDirection(submap, start_point)
+
+    if rotation_required:
+      prev_x = self.block_size_x
+      prev_y = self.block_size_y
+      self.block_size_x = prev_y
+      self.block_size_y = prev_x
+      
+      # Since we are rotating, we need to shift the start point accordingly
+      if overall_direction == Direction.UP:
+        if initial_direction == Direction.LEFT:
+          start_point.x += prev_x//2 - self.block_size_x//2
+          start_point.y += prev_y//2 - self.block_size_y//2
+        else:
+          start_point.x += -prev_x//2 + self.block_size_x//2
+          start_point.y += prev_y//2 - self.block_size_y//2
+      elif overall_direction == Direction.DOWN:
+        if initial_direction == Direction.LEFT:
+          start_point.x += prev_x//2 - self.block_size_x//2
+          start_point.y += -prev_y//2 + self.block_size_y//2
+        else:
+          start_point.x += -prev_x//2 + self.block_size_x//2
+          start_point.y += -prev_y//2 + self.block_size_y//2
+      elif overall_direction == Direction.LEFT:
+        if initial_direction == Direction.UP:
+          start_point.x += prev_x//2 - self.block_size_x//2
+          start_point.y += prev_y//2 - self.block_size_y//2
+        else:
+          start_point.x += prev_x//2 - self.block_size_x//2
+          start_point.y += -prev_y//2 + self.block_size_y//2
+      else:
+        if initial_direction == Direction.UP:
+          start_point.x += -prev_x//2 + self.block_size_x//2
+          start_point.y += prev_y//2 - self.block_size_y//2
+        else:
+          start_point.x += -prev_x//2 + self.block_size_x//2
+          start_point.y += -prev_y//2 + self.block_size_y//2
+
+
+      # Set to 90 deg if 0 or set to 0 otherwise
+      if self.cur_rot == 0:
+        self.cur_rot = math.radians(90)
+      else:
+        self.cur_rot = 0
+      
+    path = [Pose(start_point.x, start_point.y, self.cur_rot)]
+    
+    sweep_length = 0
+    number_of_sweeps = 0
+    remaining = 0
+
+    temp_pos = start_point
+
+    # overall direction and initial direction must be perpindicular
+    assert overall_direction != initial_direction
+    assert overall_direction.opposite() != initial_direction
+
+    print(self.block_size_x, self.block_size_y, initial_direction, overall_direction)
+    
+    sweep_length = max(submap.size_x, submap.size_y) - min(self.block_size_x, self.block_size_y)
+    number_of_sweeps = min(submap.size_x, submap.size_y) // max(self.block_size_x, self.block_size_y)
+    remaining = min(submap.size_x, submap.size_y) % max(self.block_size_x, self.block_size_y)
+
+    for count, n in enumerate(range(number_of_sweeps)):
+
+      # Move along sweep line
+      for i in range(sweep_length):
+        temp_pos = temp_pos.shift(initial_direction)
+        pose = Pose(temp_pos.x, temp_pos.y, self.cur_rot)
+        path.append(pose)
+
+      initial_direction = initial_direction.opposite()
+
+      # Exit here on last movement (dont shift when we reach end)
+      if count == number_of_sweeps - 1:
+        break
+
+      # Shift to next sweep line
+      for j in range(max(self.block_size_x, self.block_size_y)):
+        temp_pos = temp_pos.shift(overall_direction)
+        pose = Pose(temp_pos.x, temp_pos.y, self.cur_rot)
+        path.append(pose)
+
+    # This will cover the case where the rectangle is not a perfect division of the length of the sweeper
+    # NOTE: This causes double coverage along the entire sweep line
+    if remaining != 0:
+      # Shift to next sweep line
+      for j in range(remaining):
+        temp_pos = temp_pos.shift(overall_direction)
+        pose = Pose(temp_pos.x, temp_pos.y, self.cur_rot)
+        path.append(pose)
+      
+      for i in range(sweep_length):
+        temp_pos = temp_pos.shift(initial_direction)
+        pose = Pose(temp_pos.x, temp_pos.y, self.cur_rot)
+        path.append(pose)
+
+    return path
+
+  def getSweepDirection(self, submap, start_point):
+
+    # TODO: Edge case occurs when we rotate the block but the block is too wide to do so
+
+    rotation_required = False
+    overall_direction = None
+    initial_direction = None
+
+    diff_to_top = start_point.y - submap.min_y
+    diff_to_bot = submap.max_y - start_point.y
+
+    diff_to_left = start_point.x - submap.min_x
+    diff_to_right = submap.max_x - start_point.x
+
+    assert diff_to_top > 0
+    assert diff_to_bot > 0
+    assert diff_to_left > 0
+    assert diff_to_right > 0
+
+
+    if submap.size_x >= submap.size_y:
+      # Overall direction is UP/DOWN
+      # Initial direction is LEFT/RIGHT
+
+
+      if diff_to_top <= diff_to_bot:
+        overall_direction = Direction.DOWN
+      else:
+        overall_direction = Direction.UP
+
+      if diff_to_left <= diff_to_right:
+        initial_direction = Direction.RIGHT
+      else:
+        initial_direction = Direction.LEFT
+
+      # Check if we need to rotate so largest edge is facing initial direction
+      if self.block_size_x > self.block_size_y:
+        rotation_required = True
+    
+    else:
+      # Overall direction is LEFT/RIGHT
+      # Initial direction is UP/DOWN
+
+      if diff_to_top <= diff_to_bot:
+        initial_direction = Direction.DOWN
+      else:
+        initial_direction = Direction.UP
+
+      if diff_to_left <= diff_to_right:
+        overall_direction = Direction.RIGHT
+      else:
+        overall_direction = Direction.LEFT
+
+      # Check if we need to rotate so largest edge is facing initial direction
+      if self.block_size_x < self.block_size_y:
+        rotation_required = True
+
+    return (overall_direction, initial_direction, rotation_required)
+
+  def moveToNextSubmap(self, cur_pos, next_submap):
+    target_corner = next_submap.corners[0]
+    min_distance = cur_pos.distance_to(target_corner)
+
+    for i in next_submap.corners[:-1]:
+      cur_dist = cur_pos.distance_to(i)
+
+      if cur_dist < min_distance:
+        target_corner = i
+    
+    # Find path to target corner
+
+
   def process(self, submaps):
     self.createGraphFromSubmaps(submaps)
 
@@ -327,17 +420,28 @@ class SubmapPlanner:
     reduced_adj_matrix = self.seperateLeafChains()
 
     hamiltonian_path_exists = self.heldKarp(reduced_adj_matrix)
-    path = []
+    ordered_submaps = []
 
     if hamiltonian_path_exists:
-      path = self.getHamiltonianPath(reduced_adj_matrix)
+      ordered_submaps = self.getHamiltonianPath(reduced_adj_matrix)
       
-    path = list(map(lambda n: self.idx_map[n], path))
+    ordered_submaps = list(map(lambda n: self.idx_map[n], ordered_submaps))
 
-    for chain in self.leaf_chains:
-      pos = path.index(chain[-1][1])
+    # for chain in self.leaf_chains:
+    #   pos = ordered_submaps.index(chain[-1][1])
       
-      for j in chain:
-        path.insert(pos + 1, j[0])
+    #   for j in chain:
+    #     ordered_submaps.insert(pos + 1, j[0])
+
+    path = []
+
+    print(ordered_submaps)
+    print(self.leaf_chains)
+
+    path = []
+    # ordered submaps contains indexes of submaps
+    # for cur in ordered_submaps:
+      # path += self.lawnmower(submaps[cur])
+    # path = self.lawnmower(submaps[13].corners[0] + Point(self.block_size_x//2, -self.block_size_y//2), submaps[13])
 
     return path
