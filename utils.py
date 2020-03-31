@@ -18,8 +18,14 @@ class Point:
     self.x = x
     self.y = y
 
-  def distance_to(self, rhs):
-    return sqrt((self.x + rhs.x)**2 + (self.y + rhs.y)**2)
+  def distanceTo(self, rhs):
+    return sqrt((self.x - rhs.x)**2 + (self.y - rhs.y)**2)
+
+  def nhood4(self):
+    return [self + Point(-1, 0), self + Point(0, -1), self + Point(1, 0), self + Point(0, 1)]
+
+  def copy(self):
+    return Point(self.x, self.y)
 
   def __str__(self):
     return '{}, {}'.format(self.x, self.y)
@@ -29,6 +35,9 @@ class Point:
 
   def __eq__(self, rhs):
     return self.x == rhs.x and self.y == rhs.y
+
+  def __lt__(self, rhs):
+    return self.x < rhs.x
 
   def __hash__(self):
     return self.x * 1000 + self.y
@@ -85,6 +94,12 @@ class Direction(Enum):
       return Direction.LEFT
     else:
       return self    
+  
+  def isHorizontal(self):
+    if self.name == "LEFT" or self.name == "RIGHT":
+      return True
+    else:
+      return False
 
 class Submap:
   def __init__(self, corners : [Point]):
@@ -94,38 +109,22 @@ class Submap:
     self.size_x = abs(corners[0].x - corners[2].x)
     self.size_y = abs(corners[0].y - corners[2].y)
     
-    # Give mins and maxs initial values
-    self.min_x = corners[0].x
-    self.min_y = corners[0].y
+    # Get max and min values
+    self.min_x = min(self.corners, key=lambda p: p.x).x
+    self.min_y = min(self.corners, key=lambda p: p.y).y
 
-    self.max_x = corners[0].x
-    self.max_y = corners[0].y
-
-    # Actually find the min and max values
-    for p in corners:
-      if p.x < self.min_x:
-        self.min_x = p.x
-      if p.y < self.min_y:
-        self.min_y = p.y
-
-      if p.x > self.max_x:
-        self.max_x = p.x
-      if p.y > self.max_y:
-        self.max_y = p.y
-
+    self.max_x = max(self.corners, key=lambda p: p.x).x
+    self.max_y = max(self.corners, key=lambda p: p.y).y
 
     # Rounds down
     self.centre_x = (self.max_x + self.min_x)//2
     self.centre_y = (self.max_y + self.min_y)//2
 
+    # Sweep directions
+    self.overall_direction = None
+    self.initial_direction = None
+
   def range(self):
-    min_x = min(self.corners, key=lambda p: p.x).x
-    min_y = min(self.corners, key=lambda p: p.y).y
-
-    max_x = max(self.corners, key=lambda p: p.x).x
-    max_y = max(self.corners, key=lambda p: p.y).y
-
-
-    for j in range(min_y, max_y + 1):
-      for i in range(min_x, max_x + 1):
+    for j in range(self.min_y, self.max_y + 1):
+      for i in range(self.min_x, self.max_x + 1):
         yield (i,j)

@@ -57,16 +57,18 @@ planner = SubmapPlanner(occ_grid, 20, 2)
 path = planner.process(submapper.submaps)
 
 # for s in submapper.submaps:
-#   path = planner.generatePathForSubmap(s)
+#   path = planner.generatePathForSubmap(s))
 
 for p in path:
-  wx, wy = occ_grid.mapToWorld(p.x, p.y)
-  pose = Pose(wx, wy, p.theta)
+  wx, wy = occ_grid.mapToWorld(p[0], p[1])
+  pose = Pose(wx, wy, math.radians(p[2] * 90))
   set2DPose(robot, pose)
   pr.step()
   time.sleep(0.02)
 
 time.sleep(1)
+
+
 # visualization_grid = submapper.visualization()
 # print(visualization_grid)
 
