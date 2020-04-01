@@ -12,6 +12,7 @@ from gridSubmapper import GridSubmapper
 from submapPlanner import SubmapPlanner
 
 from utils import Pose
+from testing_tools import random_map_generator
 
 def setupOccGrid(occ_grid, vision_sensor):
   # Capture vision depth and create occupancy grid
@@ -31,11 +32,12 @@ def set2DPose(shape, pose):
       shape.set_orientation([0, 0, yaw])
 
 
-# Get Scene
-SCENE_FILE = join(dirname(abspath(__file__)), 'scenes/scene_maze.ttt')
 
 # Set numpy printing options
 np.set_printoptions(threshold=100*100, formatter={'all':lambda x: str(x) + ','})
+
+# Get Scene
+SCENE_FILE = join(dirname(abspath(__file__)), 'scenes/scene_cpp.ttt')
 
 # Start Simulation
 pr = PyRep()
@@ -43,6 +45,8 @@ pr.launch(SCENE_FILE, headless=False)
 pr.start()
 robot = Shape('start_pose')
 vision_sensor = VisionSensor('vision_sensor')
+
+random_map_generator.generate_random_map(3, rng_seed=0)
 
 # Setup occ_grid
 occ_grid = OccupancyGrid()
@@ -53,24 +57,33 @@ pr.step()
 submapper = GridSubmapper(occ_grid)
 submapper.process()
 
-planner = SubmapPlanner(occ_grid, 20, 2)
+bounding_box = robot.get_bounding_box()
+
+block_size_x = round(bounding_box[1] - bounding_box[0], 3)
+block_size_y = round(bounding_box[3] - bounding_box[2], 3)
+
+planner = SubmapPlanner(occ_grid, int(block_size_x/occ_grid.resolution), int(block_size_y/occ_grid.resolution))
 path = planner.process(submapper.submaps)
 
-# for s in submapper.submaps:
-#   path = planner.generatePathForSubmap(s))
+print(path)
 
 for p in path:
   wx, wy = occ_grid.mapToWorld(p[0], p[1])
   pose = Pose(wx, wy, math.radians(p[2] * 90))
+  # print(wx, wy)
   set2DPose(robot, pose)
   pr.step()
-  time.sleep(0.02)
+  time.sleep(0.01)
 
 time.sleep(1)
 
 
 # visualization_grid = submapper.visualization()
 # print(visualization_grid)
+# print()
+# print(planner.inflated_occ_grid[0])
+# print()
+# print(planner.inflated_occ_grid[1])
 
 # End Simulation
 pr.stop()

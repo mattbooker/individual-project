@@ -7,9 +7,12 @@ import numpy as np
 import time
 import random
 
-random.seed()
+def generate_random_map(total_objects, only_rectilinear=True, rng_seed = -1):
 
-def generate_random_map(total_objects, only_rectilinear=True):
+	if rng_seed == -1:
+		random.seed()
+	else:
+		random.seed(rng_seed)
 
 	base = Shape('floor')
 	base.set_collidable(False)
@@ -24,8 +27,8 @@ def generate_random_map(total_objects, only_rectilinear=True):
 		while True:
 			#TODO: Set orientation if only_rectilinear is false
 
-			random_x_size = random.uniform(0, 0.7*size_x)
-			random_y_size = random.uniform(0, 0.7*size_y)
+			random_x_size = random.uniform(0.1*size_x, 0.5*size_x)
+			random_y_size = random.uniform(0.1*size_y, 0.5*size_y)
 
 			random_x_pos = random.uniform(random_x_size/2, size_x - random_x_size/2) - 0.5
 			random_y_pos = random.uniform(random_y_size/2, size_y - random_y_size/2) - 0.5

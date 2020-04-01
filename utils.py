@@ -106,8 +106,8 @@ class Submap:
     # Clockwise order of corners
     self.corners = corners
 
-    self.size_x = abs(corners[0].x - corners[2].x)
-    self.size_y = abs(corners[0].y - corners[2].y)
+    self.size_x = abs(corners[0].x - corners[2].x) + 1
+    self.size_y = abs(corners[0].y - corners[2].y) + 1
     
     # Get max and min values
     self.min_x = min(self.corners, key=lambda p: p.x).x

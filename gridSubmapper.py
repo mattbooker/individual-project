@@ -683,14 +683,23 @@ class GridSubmapper:
   def process(self):
     concave_corners = self.getCorners()
 
-    # Preproces corners
-    vertical_cogrid, horizontal_cogrid, noncogrid_corners = self.seperateCorners(concave_corners)
+    # If we found corners then process them
+    if len(concave_corners) != 0:
 
-    leftover_corners = self.handleCogridCorners(vertical_cogrid, horizontal_cogrid)
+      # Preproces corners
+      vertical_cogrid, horizontal_cogrid, noncogrid_corners = self.seperateCorners(concave_corners)
 
-    self.handleRemainingCorners(noncogrid_corners, leftover_corners)
+      leftover_corners = self.handleCogridCorners(vertical_cogrid, horizontal_cogrid)
 
-    # Extract
-    self.extractSubmaps()
+      self.handleRemainingCorners(noncogrid_corners, leftover_corners)
+
+      # Extract
+      self.extractSubmaps()
+    
+    # If no corners were found then use the whole map as a submap
+    else:
+      self.occ_grid[0, 0] = Direction.RIGHT.value
+      entire_map = self.makeRectangle(0, 0, self.possible_rectangles)
+      self.submaps.append(entire_map)
 
     return self.submaps

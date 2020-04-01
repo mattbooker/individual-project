@@ -37,24 +37,37 @@ class SubmapPlanner:
     for i in range(inflated_grid.size_x):
       for j in range(inflated_grid.size_y):
 
-        relevant_edge = False
-
-        if inflate_vertical_edges and (i == 0 or i == inflated_grid.size_x - 1):
-          relevant_edge = True
-        elif (not inflate_vertical_edges) and (j == 0 or j == inflated_grid.size_y - 1):
-          relevant_edge = True
-
         # If location occupied
-        if occ_grid[i, j] == 1 or relevant_edge:
+        if occ_grid[i, j] == 1:
 
           # Iterate over footprint shape
-          for a in range(-footprint_x//2 + 1, footprint_x//2):
-            for b in range(-footprint_y//2 + 1, footprint_y//2):
+          for a in range(-int(footprint_x/2), int(footprint_x/2) + 1):
+            for b in range(-int(footprint_y/2), int(footprint_y/2) + 1):
 
               # If in bounds then set to 1
               if inflated_grid.inBounds(i+a, j+b):
                 inflated_grid[i+a, j+b] = 1
 
+    # Fill in sides as well
+    for i in range(inflated_grid.size_x):
+      for b in range(-int(footprint_y/2), int(footprint_y/2) + 1):
+  
+        # If in bounds then set to 1
+        if inflated_grid.inBounds(i, -1+b):
+          inflated_grid[i, -1+b] = 1
+
+        if inflated_grid.inBounds(i, inflated_grid.size_y+b):
+          inflated_grid[i, inflated_grid.size_y+b] = 1
+
+    for j in range(inflated_grid.size_y):
+      for a in range(-int(footprint_x/2), int(footprint_x/2) + 1):
+  
+        # If in bounds then set to 1
+        if inflated_grid.inBounds(-1+a, j):
+          inflated_grid[-1+a, j] = 1
+
+        if inflated_grid.inBounds(inflated_grid.size_x+a, j):
+          inflated_grid[inflated_grid.size_x+a, j] = 1
 
     return inflated_grid
 
@@ -250,7 +263,8 @@ class SubmapPlanner:
     self.block_size_x, self.block_size_y = self.block_size_y, self.block_size_x
     self.cur_rot = int(not self.cur_rot)
 
-  def lawnmower(self, start_point, submap):    
+  def lawnmower(self, start_point, submap): 
+    
     path = [(start_point.x, start_point.y, self.cur_rot)]
 
     overall_direction = submap.overall_direction
@@ -262,7 +276,6 @@ class SubmapPlanner:
 
     temp_pos = start_point
     
-    # Calcs are wrong 
     block_shift_side = self.block_size_x if overall_direction.isHorizontal() else self.block_size_y
     submap_shift_side = submap.size_x if overall_direction.isHorizontal() else submap.size_y
 
@@ -331,9 +344,6 @@ class SubmapPlanner:
 
     diff_to_left = start_point.x - submap.min_x
     diff_to_right = submap.max_x - start_point.x
-
-    assert diff_to_top != diff_to_bot
-    assert diff_to_left != diff_to_right
 
     if submap.size_x >= submap.size_y:
       # Overall direction is UP/DOWN
@@ -407,16 +417,17 @@ class SubmapPlanner:
     if rotation_required:
       goal_layer = int(not goal_layer)
 
-    # Occurs when we are already at goal
-    if cur_pos == goal_point and current_layer == goal_layer:
-      return [(cur_pos.x, cur_pos.y, self.cur_rot)]
-
     # save the directions to the submap
     next_submap.overall_direction = overall_direction
     next_submap.initial_direction = initial_direction
 
     print(cur_pos, current_layer, goal_point, goal_layer)
-    return self.dijkstra(cur_pos, current_layer, goal_point, goal_layer)
+
+    # If already at goal return goal, otherwise use dijkstra to find path
+    if cur_pos == goal_point and current_layer == goal_layer:
+      return [(cur_pos.x, cur_pos.y, self.cur_rot)]
+    else:
+      return self.dijkstra(cur_pos, current_layer, goal_point, goal_layer)
 
   def dijkstra(self, start_pos, start_layer, goal_pos, goal_layer):
 
@@ -495,35 +506,38 @@ class SubmapPlanner:
   def refineSubmapStartpoint(self, target_corner, overall_direction, initial_direction):
 
     target_point = target_corner.copy()
+    
+    shift_value_x = round((self.block_size_x - 0.5) / 2)
+    shift_value_y = round((self.block_size_y - 0.5) / 2)
 
     if overall_direction == Direction.UP:
       if initial_direction == Direction.LEFT:
-        target_point.x += -min(self.block_size_x, self.block_size_y)//2
-        target_point.y += -max(self.block_size_x, self.block_size_y)//2
+        target_point.x += -min(shift_value_x, shift_value_y)
+        target_point.y += -max(shift_value_x, shift_value_y)
       else:
-        target_point.x += min(self.block_size_x, self.block_size_y)//2
-        target_point.y += -max(self.block_size_x, self.block_size_y)//2
+        target_point.x += min(shift_value_x, shift_value_y)
+        target_point.y += -max(shift_value_x, shift_value_y)
     elif overall_direction == Direction.DOWN:
       if initial_direction == Direction.LEFT:
-        target_point.x += -min(self.block_size_x, self.block_size_y)//2
-        target_point.y += max(self.block_size_x, self.block_size_y)//2
+        target_point.x += -min(shift_value_x, shift_value_y)
+        target_point.y += max(shift_value_x, shift_value_y)
       else:
-        target_point.x += min(self.block_size_x, self.block_size_y)//2
-        target_point.y += max(self.block_size_x, self.block_size_y)//2
+        target_point.x += min(shift_value_x, shift_value_y)
+        target_point.y += max(shift_value_x, shift_value_y)
     elif overall_direction == Direction.LEFT:
       if initial_direction == Direction.UP:
-        target_point.x += -max(self.block_size_x, self.block_size_y)//2
-        target_point.y += -min(self.block_size_x, self.block_size_y)//2
+        target_point.x += -max(shift_value_x, shift_value_y)
+        target_point.y += -min(shift_value_x, shift_value_y)
       else:
-        target_point.x += -max(self.block_size_x, self.block_size_y)//2
-        target_point.y += min(self.block_size_x, self.block_size_y)//2
+        target_point.x += -max(shift_value_x, shift_value_y)
+        target_point.y += min(shift_value_x, shift_value_y)
     else:
       if initial_direction == Direction.UP:
-        target_point.x += max(self.block_size_x, self.block_size_y)//2
-        target_point.y += -min(self.block_size_x, self.block_size_y)//2
+        target_point.x += max(shift_value_x, shift_value_y)
+        target_point.y += -min(shift_value_x, shift_value_y)
       else:
-        target_point.x += max(self.block_size_x, self.block_size_y)//2
-        target_point.y += min(self.block_size_x, self.block_size_y)//2
+        target_point.x += max(shift_value_x, shift_value_y)
+        target_point.y += min(shift_value_x, shift_value_y)
 
     return target_point
 
@@ -537,20 +551,19 @@ class SubmapPlanner:
 
     # TODO: The optimal start and end vertex would be those that are attached to the two longest chains (so we dont need to back track them
     reduced_adj_matrix = self.seperateLeafChains()
-
-    hamiltonian_path_exists = self.heldKarp(reduced_adj_matrix)
     ordered_submaps = []
 
-    if hamiltonian_path_exists:
-      ordered_submaps = self.getHamiltonianPath(reduced_adj_matrix)
-      
-    ordered_submaps = list(map(lambda n: self.idx_map[n], ordered_submaps))
+    if reduced_adj_matrix is not None:
+      hamiltonian_path_exists = self.heldKarp(reduced_adj_matrix)
+    
+      if hamiltonian_path_exists:
+        ordered_submaps = self.getHamiltonianPath(reduced_adj_matrix)
 
-    # for chain in self.leaf_chains:
-    #   pos = ordered_submaps.index(chain[-1][1])
-      
-    #   for j in chain:
-    #     ordered_submaps.insert(pos + 1, j[0])
+      ordered_submaps = list(map(lambda n: self.idx_map[n], ordered_submaps))
+
+    else:
+      ordered_submaps = submaps
+
 
     path = []
 
@@ -558,15 +571,24 @@ class SubmapPlanner:
     print(self.leaf_chains)
     print()
 
-    # Setup - need to change this
-    cur_pos = submaps[ordered_submaps[0]].corners[0]
-    setup = self.pathToNextSubmap(cur_pos, submaps[ordered_submaps[0]])
-    cur_pos = Point(setup[-1][0], setup[-1][1])
+    # Setup
+    initial_submap = submaps[ordered_submaps[0]]
+    # initial_submap = submaps[6]
+    cur_pos = initial_submap.corners[0]
+    overall_direction, initial_direction, rotation_required = self.getSweepDirection(initial_submap, cur_pos)
+    cur_pos = self.refineSubmapStartpoint(cur_pos, overall_direction, initial_direction)
 
+    if rotation_required:
+      self.rotateBlock()
 
-    # TODO: Somethings wrong with the hamlitonian path and leaf chains....
-    # TODO: Current bug => pathToNextSubmap occasionally returning None
+    allowable_submap_size = min(self.block_size_x, self.block_size_y)
+
     for i in ordered_submaps:
+      # print('====== Submap ' + str(i) +  '=====')
+
+      if submaps[i].size_x <= allowable_submap_size or submaps[i].size_y <= allowable_submap_size:
+        continue
+
       print(cur_pos)
       movement = self.pathToNextSubmap(cur_pos, submaps[i])
       print(movement, i)
@@ -575,7 +597,8 @@ class SubmapPlanner:
       path.extend(self.lawnmower(cur_pos, submaps[i]))
       cur_pos = Point(path[-1][0], path[-1][1])
 
-
-
+    # movement = self.pathToNextSubmap(cur_pos, submaps[6])
+    # print(movement)
+    # path.extend(self.lawnmower(cur_pos, submaps[6]))
 
     return path
