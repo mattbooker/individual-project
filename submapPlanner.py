@@ -495,7 +495,7 @@ class SubmapPlanner:
       # Check distance to next layer (this corresponds to making a rotation)
       if self.inflated_occ_grid[next_layer].inBounds(p.x, p.y) and self.inflated_occ_grid[next_layer][p.x, p.y] == 0:
         if p not in visited[next_layer]:
-          alternate_dist = distance[current_layer][current_pos] + 50 # Higher cost for rotation
+          alternate_dist = distance[current_layer][current_pos] + 1
 
           if alternate_dist < distance[next_layer][p]:
             distance[next_layer][p] = alternate_dist
@@ -546,6 +546,8 @@ class SubmapPlanner:
     # TODO: Handle submaps that are too small
     # TODO: Add back in leaf chains? -> or change decomp all together
 
+
+    # TODO: Add more layers to planner?
 
     self.createGraphFromSubmaps(submaps)
 
