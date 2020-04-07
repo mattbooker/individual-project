@@ -33,7 +33,7 @@ class OccupancyGrid:
     return (((wx+0.00001) - self.origin_x)//self.resolution, self.size_y - ((wy+0.00001) - self.origin_y)//self.resolution)
 
   def mapToWorld(self, mx, my):
-    return (mx * self.resolution + self.origin_x, (self.size_y - 1 - my) * self.resolution + self.origin_y)
+    return (mx * self.resolution + self.origin_x, (self.size_y - my) * self.resolution + self.origin_y)
 
   def inBounds(self, x, y):
     if x >= 0 and x < self.size_x and y >= 0 and y < self.size_y:

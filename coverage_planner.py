@@ -2,6 +2,7 @@ from os.path import dirname, join, abspath
 from pyrep import PyRep
 from pyrep.objects.shape import Shape
 from pyrep.objects.vision_sensor import VisionSensor
+from pyrep.objects.octree import Octree
 from pyrep.const import PrimitiveShape
 import numpy as np
 import time
@@ -44,9 +45,10 @@ pr = PyRep()
 pr.launch(SCENE_FILE, headless=False)
 pr.start()
 robot = Shape('start_pose')
+octree = Octree('Octree')
 vision_sensor = VisionSensor('vision_sensor')
 
-random_map_generator.generate_random_map(3, rng_seed=0)
+random_map_generator.generate_random_map(3, rng_seed=4143)
 
 # Setup occ_grid
 occ_grid = OccupancyGrid()
@@ -59,19 +61,36 @@ submapper.process()
 
 bounding_box = robot.get_bounding_box()
 
-block_size_x = round(bounding_box[1] - bounding_box[0], 3)
-block_size_y = round(bounding_box[3] - bounding_box[2], 3)
+block_size_x = int(round(bounding_box[1] - bounding_box[0], 3)/occ_grid.resolution)
+block_size_y = int(round(bounding_box[3] - bounding_box[2], 3)/occ_grid.resolution)
 
-planner = SubmapPlanner(occ_grid, int(block_size_x/occ_grid.resolution), int(block_size_y/occ_grid.resolution))
+planner = SubmapPlanner(occ_grid, block_size_x, block_size_y)
 path = planner.process(submapper.submaps)
 
-print(path)
+# print(path)
+prev_rot = 0
 
 for p in path:
   wx, wy = occ_grid.mapToWorld(p[0], p[1])
   pose = Pose(wx, wy, math.radians(p[2] * 90))
   # print(wx, wy)
   set2DPose(robot, pose)
+
+
+  # Visualize the coverage
+  if p[2] != prev_rot:
+    prev_rot = p[2]
+    block_size_x, block_size_y = block_size_y, block_size_x
+
+  for i in range(-block_size_x//2 + 1, block_size_x//2):
+    for j in range(-block_size_y//2 + 1, block_size_y//2):
+      px = p[0] + i
+      py = p[1] + j
+
+      if not octree.check_point_occupancy([px, py, 0]):
+        nx, ny = occ_grid.mapToWorld(px, py)
+        octree.insert_voxels([nx, ny, 0], [255,0,0])
+
   pr.step()
   time.sleep(0.01)
 
