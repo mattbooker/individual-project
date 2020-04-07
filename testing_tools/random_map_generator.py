@@ -10,9 +10,12 @@ import random
 def generate_random_map(total_objects, only_rectilinear=True, rng_seed = -1):
 
 	if rng_seed == -1:
-		random.seed()
+		rng_seed = random.randint(0, 10000)
+		random.seed(rng_seed)
 	else:
 		random.seed(rng_seed)
+
+	print('seed = ' + str(rng_seed))
 
 	base = Shape('floor')
 	base.set_collidable(False)
