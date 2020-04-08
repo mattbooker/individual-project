@@ -1,18 +1,19 @@
-from os.path import dirname, join, abspath
+import math
+import time
+from os.path import abspath, dirname, join
+
+import numpy as np
 from pyrep import PyRep
+from pyrep.const import PrimitiveShape
 from pyrep.objects.shape import Shape
 from pyrep.objects.vision_sensor import VisionSensor
-from pyrep.const import PrimitiveShape
-import numpy as np
-import time
-import math
 
-from occupancyGrid import OccupancyGrid
 from gridSubmapper import GridSubmapper
+from occupancyGrid import OccupancyGrid
 from submapPlanner import SubmapPlanner
-
-from utils import Pose
 from testing_tools import random_map_generator
+from utils import Pose
+
 
 def setupOccGrid(occ_grid, vision_sensor):
   # Capture vision depth and create occupancy grid
@@ -65,18 +66,15 @@ block_size_y = round(bounding_box[3] - bounding_box[2], 3)
 planner = SubmapPlanner(occ_grid, int(block_size_x/occ_grid.resolution), int(block_size_y/occ_grid.resolution))
 path = planner.process(submapper.submaps)
 
-print(path)
-
 for p in path:
   wx, wy = occ_grid.mapToWorld(p[0], p[1])
   pose = Pose(wx, wy, math.radians(p[2] * 90))
-  # print(wx, wy)
+  
   set2DPose(robot, pose)
   pr.step()
   time.sleep(0.01)
 
 time.sleep(1)
-
 
 # visualization_grid = submapper.visualization()
 # print(visualization_grid)

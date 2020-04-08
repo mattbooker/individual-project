@@ -1,12 +1,15 @@
-from maximumIndependentSet import MaximumIndependentSet
 from collections import defaultdict
+
+from maximumIndependentSet import MaximumIndependentSet
 from occupancyGrid import OccupancyGrid
-from utils import Point, Direction, Submap
+from utils import Direction, Point, Submap
+
 
 class GridSubmapper:
 
   def __init__(self, occ_grid):
     self.occ_grid = occ_grid.clone()
+    self.rectilinear_occ_grid = occ_grid.generateRectilinearOcc()
     self.definite_rectangles = []
     self.possible_rectangles = set()
     self.submaps = []
@@ -21,19 +24,19 @@ class GridSubmapper:
     occupied = [False, False, False, False]
 
     # Check Top
-    if y - 1 >= 0 and self.occ_grid[x, y - 1] == 1:
+    if y - 1 >= 0 and self.rectilinear_occ_grid[x, y - 1] == 1:
       occupied[0] = True
 
     # Check Left
-    if x - 1 >= 0 and self.occ_grid[x - 1, y] == 1:
+    if x - 1 >= 0 and self.rectilinear_occ_grid[x - 1, y] == 1:
       occupied[1] = True
 
     # Check Bottom
-    if y + 1 < self.occ_grid.size_y and self.occ_grid[x, y + 1] == 1:
+    if y + 1 < self.rectilinear_occ_grid.size_y and self.rectilinear_occ_grid[x, y + 1] == 1:
       occupied[2] = True
 
     # Check Right
-    if x + 1 < self.occ_grid.size_x and self.occ_grid[x + 1, y] == 1:
+    if x + 1 < self.rectilinear_occ_grid.size_x and self.rectilinear_occ_grid[x + 1, y] == 1:
       occupied[3] = True
 
     return occupied
@@ -49,28 +52,28 @@ class GridSubmapper:
 
     # Check Top
     if y - 1 >= 0:
-      occupied[0] = self.occ_grid[x, y - 1]
+      occupied[0] = self.rectilinear_occ_grid[x, y - 1]
 
     # Check Left
     if x - 1 >= 0:
-      occupied[1] = self.occ_grid[x - 1, y]
+      occupied[1] = self.rectilinear_occ_grid[x - 1, y]
 
     # Check Bottom
-    if y + 1 < self.occ_grid.size_y:
-      occupied[2] = self.occ_grid[x, y + 1]
+    if y + 1 < self.rectilinear_occ_grid.size_y:
+      occupied[2] = self.rectilinear_occ_grid[x, y + 1]
 
     # Check Right
-    if x + 1 < self.occ_grid.size_x:
-      occupied[3] = self.occ_grid[x + 1, y]
+    if x + 1 < self.rectilinear_occ_grid.size_x:
+      occupied[3] = self.rectilinear_occ_grid[x + 1, y]
 
     return occupied
 
   def isCorner(self, x, y):
     # If point is not occupied then it cant be a corner
-    if self.occ_grid[x, y] == 0:
+    if self.rectilinear_occ_grid[x, y] == 0:
       return False
 
-    on_boundary = True if (x == 0 or x == self.occ_grid.size_x - 1 or y == 0 or y == self.occ_grid.size_y - 1) else False
+    on_boundary = True if (x == 0 or x == self.rectilinear_occ_grid.size_x - 1 or y == 0 or y == self.rectilinear_occ_grid.size_y - 1) else False
 
     occupied = self.getNhoodOccupancy(x, y)
 
@@ -90,8 +93,8 @@ class GridSubmapper:
   def getCorners(self):
     corners = []
 
-    for j in range(self.occ_grid.size_y):
-      for i in range(self.occ_grid.size_x):
+    for j in range(self.rectilinear_occ_grid.size_y):
+      for i in range(self.rectilinear_occ_grid.size_x):
         if self.isCorner(i, j):
           corners.append(Point(i,j))
     
@@ -122,7 +125,7 @@ class GridSubmapper:
           isValid = True
 
           for idx in range(start + 1, end):
-            if self.occ_grid[corners[a].x, idx] == 1:
+            if self.rectilinear_occ_grid[corners[a].x, idx] == 1:
               isValid = False
               break
           
@@ -141,7 +144,7 @@ class GridSubmapper:
           isValid = True
 
           for idx in range(start + 1, end):
-            if self.occ_grid[idx, corners[a].y] == 1:
+            if self.rectilinear_occ_grid[idx, corners[a].y] == 1:
               isValid = False
               break
 
@@ -197,31 +200,31 @@ class GridSubmapper:
       cur_point = cur_point.shift(direction)
 
       # Occurs if another edge runs over this one
-      if self.occ_grid[cur_point.x, cur_point.y] < 0:
+      if self.rectilinear_occ_grid[cur_point.x, cur_point.y] < 0:
         return False
 
-      while self.occ_grid.inBounds(cur_point.x, cur_point.y) and self.occ_grid[cur_point.x, cur_point.y] == 0:
+      while self.rectilinear_occ_grid.inBounds(cur_point.x, cur_point.y) and self.rectilinear_occ_grid[cur_point.x, cur_point.y] == 0:
         # But mark the cell with down
-        self.occ_grid[cur_point.x, cur_point.y] = direction.opposite().value
+        self.rectilinear_occ_grid[cur_point.x, cur_point.y] = direction.opposite().value
         cur_point = cur_point.shift(direction)
 
-      if self.occ_grid.inBounds(cur_point.x, cur_point.y) and self.occ_grid[cur_point.x, cur_point.y] == direction.next().value:
-        self.occ_grid[cur_point.x, cur_point.y] = Direction.INTERSECTION.value
+      if self.rectilinear_occ_grid.inBounds(cur_point.x, cur_point.y) and self.rectilinear_occ_grid[cur_point.x, cur_point.y] == direction.next().value:
+        self.rectilinear_occ_grid[cur_point.x, cur_point.y] = Direction.INTERSECTION.value
 
     else:
       cur_point = cur_point.shift(direction)
 
       # Occurs if another edge runs over this one
-      if self.occ_grid[cur_point.x, cur_point.y] < 0:
+      if self.rectilinear_occ_grid[cur_point.x, cur_point.y] < 0:
         return False
 
-      while self.occ_grid.inBounds(cur_point.x, cur_point.y) and self.occ_grid[cur_point.x, cur_point.y] == 0:
-        self.occ_grid[cur_point.x, cur_point.y] = direction.value
+      while self.rectilinear_occ_grid.inBounds(cur_point.x, cur_point.y) and self.rectilinear_occ_grid[cur_point.x, cur_point.y] == 0:
+        self.rectilinear_occ_grid[cur_point.x, cur_point.y] = direction.value
         cur_point = cur_point.shift(direction)
 
       # TODO:
-      if self.occ_grid.inBounds(cur_point.x, cur_point.y) and self.occ_grid[cur_point.x, cur_point.y] == direction.next().value:
-        self.occ_grid[cur_point.x, cur_point.y] = Direction.INTERSECTION.value
+      if self.rectilinear_occ_grid.inBounds(cur_point.x, cur_point.y) and self.rectilinear_occ_grid[cur_point.x, cur_point.y] == direction.next().value:
+        self.rectilinear_occ_grid[cur_point.x, cur_point.y] = Direction.INTERSECTION.value
 
     return True
 
@@ -301,15 +304,15 @@ class GridSubmapper:
         result = []
 
         cur_point = leftward_end_point.shift(Direction.RIGHT)
-        while self.occ_grid.inBounds(cur_point.x, cur_point.y) and self.occ_grid[cur_point.x, cur_point.y] == 0:
-          self.occ_grid[cur_point.x, cur_point.y] = Direction.LEFT.value
+        while self.rectilinear_occ_grid.inBounds(cur_point.x, cur_point.y) and self.rectilinear_occ_grid[cur_point.x, cur_point.y] == 0:
+          self.rectilinear_occ_grid[cur_point.x, cur_point.y] = Direction.LEFT.value
           cur_point = cur_point.shift(Direction.RIGHT)
 
         result.append(cur_point.shift(Direction.LEFT))
 
         cur_point = rightward_end_point.shift(Direction.LEFT)
-        while self.occ_grid.inBounds(cur_point.x, cur_point.y) and self.occ_grid[cur_point.x, cur_point.y] == 0:
-          self.occ_grid[cur_point.x, cur_point.y] = Direction.RIGHT.value
+        while self.rectilinear_occ_grid.inBounds(cur_point.x, cur_point.y) and self.rectilinear_occ_grid[cur_point.x, cur_point.y] == 0:
+          self.rectilinear_occ_grid[cur_point.x, cur_point.y] = Direction.RIGHT.value
           cur_point = cur_point.shift(Direction.LEFT)
 
         result.append(cur_point.shift(Direction.RIGHT))
@@ -335,15 +338,15 @@ class GridSubmapper:
         result = []
 
         cur_point = upward_end_point.shift(Direction.DOWN)
-        while self.occ_grid.inBounds(cur_point.x, cur_point.y) and self.occ_grid[cur_point.x, cur_point.y] == 0:
-          self.occ_grid[cur_point.x, cur_point.y] = Direction.UP.value
+        while self.rectilinear_occ_grid.inBounds(cur_point.x, cur_point.y) and self.rectilinear_occ_grid[cur_point.x, cur_point.y] == 0:
+          self.rectilinear_occ_grid[cur_point.x, cur_point.y] = Direction.UP.value
           cur_point = cur_point.shift(Direction.DOWN)
 
         result.append(cur_point.shift(Direction.UP))
 
         cur_point = downward_end_point.shift(Direction.UP)
-        while self.occ_grid.inBounds(cur_point.x, cur_point.y) and self.occ_grid[cur_point.x, cur_point.y] == 0:
-          self.occ_grid[cur_point.x, cur_point.y] = Direction.DOWN.value
+        while self.rectilinear_occ_grid.inBounds(cur_point.x, cur_point.y) and self.rectilinear_occ_grid[cur_point.x, cur_point.y] == 0:
+          self.rectilinear_occ_grid[cur_point.x, cur_point.y] = Direction.DOWN.value
           cur_point = cur_point.shift(Direction.UP)
 
         result.append(cur_point.shift(Direction.DOWN))
@@ -369,16 +372,16 @@ class GridSubmapper:
 
     initial_point = Point(x,y)
 
-    cur_dir = Direction(self.occ_grid[x, y])
+    cur_dir = Direction(self.rectilinear_occ_grid[x, y])
     cur_point = initial_point
     cur_point = cur_point.shift(cur_dir)
 
     rectangle_corners = [initial_point]
 
-    cell_value = self.occ_grid[cur_point.x, cur_point.y]
+    cell_value = self.rectilinear_occ_grid[cur_point.x, cur_point.y]
 
     # Check the edge case where we start on a special corner
-    if cur_dir == Direction.DOWN and self.occ_grid[cur_point.x, cur_point.y] == 1:
+    if cur_dir == Direction.DOWN and self.rectilinear_occ_grid[cur_point.x, cur_point.y] == 1:
       cur_dir = Direction.LEFT
       cur_point = initial_point
       cur_point = cur_point.shift(cur_dir)
@@ -395,8 +398,8 @@ class GridSubmapper:
         exit()
 
       # Check that the current point is in bounds
-      if self.occ_grid.inBounds(cur_point.x, cur_point.y):
-        cell_value = self.occ_grid[cur_point.x, cur_point.y]
+      if self.rectilinear_occ_grid.inBounds(cur_point.x, cur_point.y):
+        cell_value = self.rectilinear_occ_grid[cur_point.x, cur_point.y]
 
       # Otherwise backtrack, change direction and mark the point as a corner in the rectangle
       else:
@@ -431,7 +434,7 @@ class GridSubmapper:
         potential_corner = cur_point
         cur_point = cur_point.shift(cur_dir)
 
-        if self.occ_grid[cur_point.x, cur_point.y] == cur_dir.value:
+        if self.rectilinear_occ_grid[cur_point.x, cur_point.y] == cur_dir.value:
           rectangle_corners.append(potential_corner)
 
         else:
@@ -454,7 +457,7 @@ class GridSubmapper:
 
   def splitIntoRectangles(self, concave_corners):
     '''
-    Given a list of concave corner points, splits the occ_grid into rectangles. Returns a list of points that are the corners of unique rectangles and
+    Given a list of concave corner points, splits the rectilinear_occ_grid into rectangles. Returns a list of points that are the corners of unique rectangles and
     a set of points that lie on the edges of other potential rectangles that were missed. For any split it can create either 1 or 2 rectangles, thus
     the set is used to keep track of extra rectangles.
     '''
@@ -541,7 +544,7 @@ class GridSubmapper:
       #   print(occupied)
 
       # Set the cell to have the correct direction and then make a submap
-      self.occ_grid[cell.x, cell.y] = direction_of_corner.value
+      self.rectilinear_occ_grid[cell.x, cell.y] = direction_of_corner.value
       self.submaps.append(self.makeRectangle(cell.x, cell.y, self.possible_rectangles))
 
   def handleCogridCorners(self, vertical_pairs, horizontal_pairs):
@@ -551,8 +554,8 @@ class GridSubmapper:
     isolated_vertical = []
     isolated_horizontal = []
     
-    # Create a temp_occ_grid to use for faster construction of the bipartite graph (if we use occ_grid it will leave remnants which we dont want)
-    temp_occ_grid = self.occ_grid.clone()
+    # Create a temp_rectilinear_occ_grid to use for faster construction of the bipartite graph (if we use rectilinear_occ_grid it will leave remnants which we dont want)
+    temp_rectilinear_occ_grid = self.rectilinear_occ_grid.clone()
 
     # Mark the vertical cogrid lines
     for num, (point_1, point_2) in enumerate(vertical_pairs, 2):
@@ -563,7 +566,7 @@ class GridSubmapper:
 
       # Mark the cells from start to end with num
       for i in range(start_y, end_y + 1):
-        temp_occ_grid[point_1.x, i] = num
+        temp_rectilinear_occ_grid[point_1.x, i] = num
       
     # Mark horizontal cogrid lines and build the bipartite graph
     for num, (point_1, point_2) in enumerate(horizontal_pairs, 2 + len(vertical_pairs)):
@@ -575,13 +578,13 @@ class GridSubmapper:
       end_x = max(point_1.x, point_2.x)
 
       for i in range(start_x, end_x + 1):
-        val = int(temp_occ_grid[i, point_1.y])
+        val = int(temp_rectilinear_occ_grid[i, point_1.y])
 
         if val > 1:
           independent_node = False
           bipartite_graph[val].append(num)
 
-        temp_occ_grid[i, point_1.y] = num
+        temp_rectilinear_occ_grid[i, point_1.y] = num
 
       # Keep track of the point if it is not part of the graph
       if independent_node:
@@ -672,7 +675,7 @@ class GridSubmapper:
     self.possible_rectangles.update(possible_remaining_rectangles)
 
   def visualization(self):
-    visual_grid = self.occ_grid.clone()
+    visual_grid = self.rectilinear_occ_grid.clone()
 
     for num, submap in enumerate(self.submaps):
       for (x, y) in submap.range():
@@ -681,6 +684,7 @@ class GridSubmapper:
     return visual_grid
 
   def process(self):
+    # Find the concave corners
     concave_corners = self.getCorners()
 
     # If we found corners then process them
@@ -698,7 +702,7 @@ class GridSubmapper:
     
     # If no corners were found then use the whole map as a submap
     else:
-      self.occ_grid[0, 0] = Direction.RIGHT.value
+      self.rectilinear_occ_grid[0, 0] = Direction.RIGHT.value
       entire_map = self.makeRectangle(0, 0, self.possible_rectangles)
       self.submaps.append(entire_map)
 
