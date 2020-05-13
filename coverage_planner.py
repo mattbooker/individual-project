@@ -32,8 +32,6 @@ def set2DPose(shape, pose):
       shape.set_position([x, y, shape.get_position()[2]])
       shape.set_orientation([0, 0, yaw])
 
-
-
 # Set numpy printing options
 np.set_printoptions(threshold=100*100, formatter={'all':lambda x: str(x) + ','})
 
@@ -67,35 +65,60 @@ block_size_y = int(round(bounding_box[3] - bounding_box[2], 3)/occ_grid.resoluti
 planner = SubmapPlanner(occ_grid, block_size_x, block_size_y)
 path = planner.process(submapper.submaps)
 
-# print(path)
-prev_rot = 0
+# For visualization
+coverage_grid = OccupancyGrid()
+setupOccGrid(coverage_grid, vision_sensor)
+
+obstacle_mask = coverage_grid.grid == 0
+mask = obstacle_mask
+
+dc_account_for = set()
 
 for p in path:
+
+  # Move the robot along the path
   wx, wy = occ_grid.mapToWorld(p[0], p[1])
   pose = Pose(wx, wy, math.radians(p[2] * 90))
   # print(wx, wy)
   set2DPose(robot, pose)
 
+  # Visualization
+  new_coverage = OccupancyGrid()
+  setupOccGrid(new_coverage, vision_sensor)
+  prev_grid = np.array(coverage_grid.grid, copy=True)
+  coverage_grid.grid[mask] += new_coverage.grid[mask]
+  
+  pos = np.argwhere((coverage_grid.grid - prev_grid) == 1)
 
-  # Visualize the coverage
-  if p[2] != prev_rot:
-    prev_rot = p[2]
-    block_size_x, block_size_y = block_size_y, block_size_x
+  new_mask = new_coverage.grid == 0
+  mask = np.logical_and(obstacle_mask, new_mask)
 
-  for i in range(-block_size_x//2 + 1, block_size_x//2):
-    for j in range(-block_size_y//2 + 1, block_size_y//2):
-      px = p[0] + i
-      py = p[1] + j
+  if len(pos) == 0:
+    continue
+  
+  min_x = np.min(pos[:,0])
+  min_y = np.min(pos[:,1])
+  max_x = np.max(pos[:,0])
+  max_y = np.max(pos[:,1])
 
-      if not octree.check_point_occupancy([px, py, 0]):
-        nx, ny = occ_grid.mapToWorld(px, py)
-        octree.insert_voxels([nx, ny, 0], [255,0,0])
+  centre_x = (max_x + min_x)/2
+  centre_y = (max_y + min_y)/2
+
+  wx, wy = coverage_grid.mapToWorld(centre_y, centre_x)
+
+  grid_length = max_x - min_x
+  grid_width =  max_y - min_y
+
+  # Pad length and width with resolution to prevent issues when one is zero and to ensure no gaps between shapes
+  length = coverage_grid.resolution * grid_length + coverage_grid.resolution
+  width = coverage_grid.resolution * grid_width + coverage_grid.resolution
+
+  Shape.create(type=PrimitiveShape.CUBOID, size=[width, length,.05], position=[wx,wy,0.0], color=[255,0,0], static=True, renderable=False)
 
   pr.step()
   time.sleep(0.01)
 
-time.sleep(1)
-
+# print(coverage_grid)
 
 # visualization_grid = submapper.visualization()
 # print(visualization_grid)
