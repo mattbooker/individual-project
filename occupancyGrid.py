@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib as mpl
+from matplotlib import pyplot as plt
 
 class OccupancyGrid:
   occ_grid_converter = np.vectorize(lambda x : 0.0 if x >= 0.98 else 1.0)
@@ -50,3 +52,27 @@ class OccupancyGrid:
       result += '\n'
 
     return result
+
+  def setup_drawing(self):
+    # Set the colormap for drawing
+    base_cmap = plt.cm.Reds
+
+    cmaplist = ['k', 'w'] + [base_cmap(i) for i in range(50,250,25)]
+
+    # create the new map
+    cmap = mpl.colors.LinearSegmentedColormap.from_list('Custom cmap', cmaplist, 10)
+
+    # define the bins and normalize
+    bounds = np.linspace(-1, 9, 11)
+    norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
+
+    self.fig = plt.figure()
+    self.ax = self.fig.add_subplot()
+    self.im = self.ax.imshow(self.grid, cmap=cmap, norm=norm)
+    self.fig.colorbar(self.im)
+    plt.show(block=False)
+
+  def draw(self):
+    self.im.set_data(self.grid)
+    self.fig.canvas.draw()
+    self.ax.draw_artist(self.ax.patch)

@@ -15,6 +15,8 @@ from submapPlanner import SubmapPlanner
 from utils import Pose
 from testing_tools import random_map_generator
 
+from matplotlib import pyplot as plt
+
 def setupOccGrid(occ_grid, vision_sensor):
   # Capture vision depth and create occupancy grid
   pr.step()
@@ -72,7 +74,10 @@ setupOccGrid(coverage_grid, vision_sensor)
 obstacle_mask = coverage_grid.grid == 0
 mask = obstacle_mask
 
-dc_account_for = set()
+# Set obstacles to -1 for coverage calculations
+coverage_grid.grid *= -1
+
+coverage_grid.setup_drawing()
 
 for p in path:
 
@@ -88,35 +93,11 @@ for p in path:
   prev_grid = np.array(coverage_grid.grid, copy=True)
   coverage_grid.grid[mask] += new_coverage.grid[mask]
   
-  pos = np.argwhere((coverage_grid.grid - prev_grid) == 1)
-
   new_mask = new_coverage.grid == 0
   mask = np.logical_and(obstacle_mask, new_mask)
 
-  if len(pos) == 0:
-    continue
-  
-  min_x = np.min(pos[:,0])
-  min_y = np.min(pos[:,1])
-  max_x = np.max(pos[:,0])
-  max_y = np.max(pos[:,1])
-
-  centre_x = (max_x + min_x)/2
-  centre_y = (max_y + min_y)/2
-
-  wx, wy = coverage_grid.mapToWorld(centre_y, centre_x)
-
-  grid_length = max_x - min_x
-  grid_width =  max_y - min_y
-
-  # Pad length and width with resolution to prevent issues when one is zero and to ensure no gaps between shapes
-  length = coverage_grid.resolution * grid_length + coverage_grid.resolution
-  width = coverage_grid.resolution * grid_width + coverage_grid.resolution
-
-  Shape.create(type=PrimitiveShape.CUBOID, size=[width, length,.05], position=[wx,wy,0.0], color=[255,0,0], static=True, renderable=False)
-
+  coverage_grid.draw()
   pr.step()
-  time.sleep(0.01)
 
 # print(coverage_grid)
 
