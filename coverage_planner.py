@@ -1,21 +1,16 @@
-from os.path import dirname, join, abspath
+import math
+from os.path import abspath, dirname, join
+
+import numpy as np
 from pyrep import PyRep
 from pyrep.objects.shape import Shape
 from pyrep.objects.vision_sensor import VisionSensor
-from pyrep.objects.octree import Octree
-from pyrep.const import PrimitiveShape
-import numpy as np
-import time
-import math
 
-from occupancyGrid import OccupancyGrid
 from gridSubmapper import GridSubmapper
+from occupancyGrid import OccupancyGrid
 from submapPlanner import SubmapPlanner
-
-from utils import Pose
 from testing_tools import random_map_generator
-
-from matplotlib import pyplot as plt
+from utils import Pose
 
 def setupOccGrid(occ_grid, vision_sensor):
   # Capture vision depth and create occupancy grid
@@ -34,9 +29,6 @@ def set2DPose(shape, pose):
       shape.set_position([x, y, shape.get_position()[2]])
       shape.set_orientation([0, 0, yaw])
 
-# Set numpy printing options
-np.set_printoptions(threshold=100*100, formatter={'all':lambda x: str(x) + ','})
-
 # Get Scene
 SCENE_FILE = join(dirname(abspath(__file__)), 'scenes/scene_cpp.ttt')
 
@@ -45,7 +37,6 @@ pr = PyRep()
 pr.launch(SCENE_FILE, headless=False)
 pr.start()
 robot = Shape('start_pose')
-octree = Octree('Octree')
 vision_sensor = VisionSensor('vision_sensor')
 
 random_map_generator.generate_random_map(3, rng_seed=4143)
