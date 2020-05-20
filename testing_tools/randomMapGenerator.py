@@ -7,15 +7,9 @@ import numpy as np
 import time
 import random
 
-def generate_random_map(total_objects, only_rectilinear=True, rng_seed = -1):
+def generate_random_map(total_objects, only_rectilinear=True):
 
-	if rng_seed == -1:
-		rng_seed = random.randint(0, 10000)
-		random.seed(rng_seed)
-	else:
-		random.seed(rng_seed)
-
-	print('seed = ' + str(rng_seed))
+	# Set the random seed in the main module
 
 	base = Shape('floor')
 	base.set_collidable(False)
@@ -45,24 +39,3 @@ def generate_random_map(total_objects, only_rectilinear=True, rng_seed = -1):
 				new_shape.remove()
 
 	return objects
-
-# # Get Scene
-# SCENE_FILE = join(dirname(dirname(abspath(__file__))), 'scenes/scene_cpp.ttt')
-
-# # Set numpy printing options
-# np.set_printoptions(threshold=100*100, formatter={'all':lambda x: str(x) + ','})
-
-# # Start Simulation
-# pr = PyRep()
-# pr.launch(SCENE_FILE, headless=False)
-# pr.start()
-# pr.step()
-
-# generate_random_map(3)
-# pr.step()
-# time.sleep(2)
-
-# # End Simulation
-# pr.stop()
-# pr.shutdown()
-
