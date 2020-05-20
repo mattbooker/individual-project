@@ -44,6 +44,9 @@ class OccupancyGrid:
       return False
 
   def __str__(self):
+    # Set numpy printing options
+    np.set_printoptions(threshold=100*100, formatter={'all':lambda x: str(x) + ','})
+
     result = ""
     for j in range(self.size_y):
       for i in range(self.size_x):
