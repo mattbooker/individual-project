@@ -1,6 +1,35 @@
 from enum import Enum
 from math import sqrt
 
+def raytrace(x0, y0, x1, y1):
+
+  # Uses bresenham2d for raytracing
+
+  line = []
+
+  dx = abs(x1-x0)
+  sx = 1 if x0 < x1 else -1
+  dy = -abs(y1-y0)
+  sy = 1 if y0 < y1 else -1
+  err = dx+dy
+
+  while (True):
+    line.append((x0, y0))
+
+    if (x0==x1 and y0==y1):
+      break
+
+    e2 = 2*err
+
+    if (e2 >= dy):
+      err += dy
+      x0 += sx
+    if (e2 <= dx):
+      err += dx
+      y0 += sy
+
+  return line
+
 class Pose:
   def __init__(self, x, y, theta):
     self.x = x
@@ -128,3 +157,4 @@ class Submap:
     for j in range(self.min_y, self.max_y + 1):
       for i in range(self.min_x, self.max_x + 1):
         yield (i,j)
+
