@@ -21,7 +21,7 @@ from submapPlanner import SubmapPlanner
 from testing_tools import randomMapGenerator
 from utils import Pose
 
-random.seed()
+random.seed(17)
 
 def setupOccGrid(occ_grid, vision_sensor):
   # Capture vision depth and create occupancy grid
@@ -116,6 +116,36 @@ class DistanceTransform:
 
     return result
 
+  def nhood8(self, x, y):
+    result = []
+
+    if x >= 1 and self.dist_grid[x-1, y] != -1:
+      result.append((x - 1, y))
+
+    if x < self.dist_grid.size_x - 1 and self.dist_grid[x+1, y] != -1:
+      result.append((x + 1, y))
+
+    if y >= 1 and self.dist_grid[x, y-1] != -1:
+      result.append((x, y - 1))
+
+    if y < self.dist_grid.size_y - 1 and self.dist_grid[x, y+1] != -1:
+      result.append((x, y + 1))
+
+    if x >= 1 and y >= 1 and self.dist_grid[x-1, y-1] != -1:
+      result.append((x - 1, y - 1))
+
+    if x >= 1 and y < self.dist_grid.size_y - 1 and self.dist_grid[x-1, y+1] != -1:
+      result.append((x - 1, y + 1))
+
+    if x < self.dist_grid.size_x - 1 and y >= 1 and self.dist_grid[x+1, y-1] != -1:
+      result.append((x + 1, y - 1))
+
+    if x < self.dist_grid.size_x - 1 and y < self.dist_grid.size_y - 1 and self.dist_grid[x+1, y+1] != -1:
+      result.append((x + 1, y + 1))
+
+    return result
+
+
   def computeDistances(self):
     # Use dijkstra
     visited = set()
@@ -139,7 +169,7 @@ class DistanceTransform:
       else:
         continue
 
-      for nbr in self.nhood4(*current_pos):
+      for nbr in self.nhood8(*current_pos):
         # new_cost = current_cost + self.distance(current_pos, nbr)
         new_cost = current_cost + 1
 
@@ -289,11 +319,11 @@ class DistanceTransform:
     temp_layer = current_layer
 
     # Check that we can rotate to specific layer and then either rotate into next cell or translate into next cell
-    while self.oriented_occ_grid[current_pos] & temp_layer == 0:
-      if self.oriented_occ_grid[next_pos] & temp_layer == 0:
+    while self.oriented_occ_grid[current_pos] & 2**temp_layer == 0:
+      if self.oriented_occ_grid[next_pos] & 2**temp_layer == 0:
         return temp_layer
 
-      if self.oriented_occ_grid[next_pos] & next_layer == 0:
+      if self.oriented_occ_grid[next_pos] & 2**next_layer == 0:
         return next_layer
 
 
@@ -301,18 +331,18 @@ class DistanceTransform:
       temp_layer = (temp_layer + 1) % 8
 
       # Stop once we have reached the original starting layer
-      if temp_layer == current_layer:
+      if temp_layer == 2**current_layer:
         break
 
     next_layer = (current_layer - 1) % 8
     temp_layer = current_layer
 
     # Checks same as above but in opposite direction
-    while self.oriented_occ_grid[current_pos] & temp_layer == 0:
-      if self.oriented_occ_grid[next_pos] & temp_layer == 0:
+    while self.oriented_occ_grid[current_pos] & 2**temp_layer == 0:
+      if self.oriented_occ_grid[next_pos] & 2**temp_layer == 0:
         return temp_layer
 
-      if self.oriented_occ_grid[next_pos] & next_layer == 0:
+      if self.oriented_occ_grid[next_pos] & 2**next_layer == 0:
         return next_layer
 
 
@@ -382,6 +412,8 @@ class DistanceTransform:
     # Compute inflation grid
     self.computeInflations()
 
+
+    # TODO: Not the best way to do this -> want to start at most explorable point
     # Find the start point -> max value in dist grid that can be visited
     traversable_mask = self.oriented_occ_grid.grid == 255
     masked_dist_grid =  np.ma.MaskedArray(self.dist_grid.grid, mask=traversable_mask)
@@ -396,6 +428,7 @@ class DistanceTransform:
       occupied_layers = occupied_layers >> 1
 
     path = []
+    c = 0
 
     # Follow the path of max cost
     while True:
@@ -406,7 +439,7 @@ class DistanceTransform:
       best_next_layer = None
 
       for nbr in self.nhood4(*current_pos):
-
+        
         if self.dist_grid[nbr] > max_cost:
           next_layer = self.getNextLayer(current_pos, current_layer, nbr)
 
@@ -417,28 +450,16 @@ class DistanceTransform:
 
       path.append((current_pos, current_layer))
       self.dist_grid[current_pos] = 0
-      
-      plt.imshow(masked_dist_grid)
-      plt.pause(0.001)
-      plt.clf()
 
       # As long as there is above a certain number of cells then attempt to visit 
       if max_cost == 0:
-        remaining_cells = np.count_nonzero(masked_dist_grid) - masked_dist_grid.count()
+        movement_to_unvisited = self.moveToUnvisited(current_pos, current_layer)
 
-        # Move to nearest unvisited if there are still cells to explore
-        if remaining_cells > 0:
-          movement_to_unvisited = self.moveToUnvisited(current_pos, current_layer)
-
-          # If we cant reach, return path
-          if len(movement_to_unvisited) == 0:
-            return path
-          else:
-            path.extend(movement_to_unvisited)
-
-        # If no remaining cells, return path
-        else:
+        # If we cant reach, return path
+        if len(movement_to_unvisited) == 0:
           return path
+        else:
+          path.extend(movement_to_unvisited)
       
         current_pos, current_layer = path[-1]
 
@@ -446,63 +467,71 @@ class DistanceTransform:
         current_pos = best_next_pos
         current_layer = best_next_layer
 
-# Get Scene
-SCENE_FILE = join(dirname(abspath(__file__)), 'scenes/scene_cpp.ttt')
 
-# Start Simulation
-pr = PyRep()
-pr.launch(SCENE_FILE, headless=False)
-pr.start()
-robot = Shape('start_pose')
-vision_sensor = VisionSensor('vision_sensor')
+# --------- DEBUGGING ------------- 
+# # Get Scene
+# SCENE_FILE = join(dirname(abspath(__file__)), 'scenes/scene_cpp.ttt')
 
-randomMapGenerator.generate_random_map(3)
+# # Start Simulation
+# pr = PyRep()
+# pr.launch(SCENE_FILE, headless=False)
+# pr.start()
+# robot = Shape('start_pose')
+# vision_sensor = VisionSensor('vision_sensor')
 
-# Setup occ_grid
-occ_grid = OccupancyGrid()
-setupOccGrid(occ_grid, vision_sensor)
+# randomMapGenerator.generate_random_map(3, True)
 
-# For visualization
-# coverage_grid = OccupancyGrid()
-# setupOccGrid(coverage_grid, vision_sensor)
+# # Setup occ_grid
+# occ_grid = OccupancyGrid()
+# setupOccGrid(occ_grid, vision_sensor)
 
-# obstacle_mask = coverage_grid.grid == 0
-# mask = obstacle_mask
+# # For visualization
+# # coverage_grid = OccupancyGrid()
+# # setupOccGrid(coverage_grid, vision_sensor)
 
-# Set obstacles to -1 for coverage calculations
-# coverage_grid.grid *= -1
-# coverage_grid.setup_drawing()
+# # obstacle_mask = coverage_grid.grid == 0
+# # mask = obstacle_mask
 
-pr.step()
+# # Set obstacles to -1 for coverage calculations
+# # coverage_grid.grid *= -1
+# # coverage_grid.setup_drawing()
 
-# Compute block size from shape in simulation
-bounding_box = robot.get_bounding_box()
-block_size_x = int(round(bounding_box[1] - bounding_box[0], 3)/occ_grid.resolution)
-block_size_y = int(round(bounding_box[3] - bounding_box[2], 3)/occ_grid.resolution)
+# pr.step()
 
-dt = DistanceTransform(occ_grid, block_size_x, block_size_y)
-path = dt.getPath()
+# # Compute block size from shape in simulation
+# bounding_box = robot.get_bounding_box()
+# block_size_x = int(round(bounding_box[1] - bounding_box[0], 3)/occ_grid.resolution)
+# block_size_y = int(round(bounding_box[3] - bounding_box[2], 3)/occ_grid.resolution)
 
+# dt = DistanceTransform(occ_grid, block_size_x, block_size_y)
+# path = dt.getPath()
+
+# count = 0
 # for p, layer in path:
+#   count += 1
+#   if count > 100:
+#     break
+
 #   wx, wy = occ_grid.mapToWorld(p[0], p[1])
 #   pose = Pose(wx, wy, layer * math.pi/8)
-#   # print(wx, wy)
+#   # print(p, layer)
 #   set2DPose(robot, pose)
 #   pr.step()
 
-#   # Visualization
-#   new_coverage = OccupancyGrid()
-#   setupOccGrid(new_coverage, vision_sensor)
-#   prev_grid = np.array(coverage_grid.grid, copy=True)
-#   coverage_grid.grid[mask] += new_coverage.grid[mask]
+# #   # Visualization
+# #   new_coverage = OccupancyGrid()
+# #   setupOccGrid(new_coverage, vision_sensor)
+# #   prev_grid = np.array(coverage_grid.grid, copy=True)
+# #   coverage_grid.grid[mask] += new_coverage.grid[mask]
   
-#   new_mask = new_coverage.grid == 0
-#   mask = np.logical_and(obstacle_mask, new_mask)
+# #   new_mask = new_coverage.grid == 0
+# #   mask = np.logical_and(obstacle_mask, new_mask)
 
-#   coverage_grid.draw()
+#   # coverage_grid.draw()
 
 #   time.sleep(0.01)
 
-# End Simulation
-pr.stop()
-pr.shutdown()
+
+# # End Simulation
+# pr.stop()
+# pr.shutdown()
