@@ -495,7 +495,7 @@ class CCRA:
 
       for nbr, layer in self.augmentedNhood4(current_pos, current_layer):
         
-        if self.dist_grid[nbr] > 0 and self.dist_grid[nbr] < min_cost
+        if self.dist_grid[nbr] > 0 and self.dist_grid[nbr] < min_cost:
           min_cost = self.dist_grid[nbr]
           best_next_pos = nbr
           best_next_layer = layer
