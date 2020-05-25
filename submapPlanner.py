@@ -541,7 +541,7 @@ class SubmapPlanner:
 
     return target_point
 
-  def process(self, submaps):
+  def getPath(self, submaps):
 
     # TODO: Handle submaps that are too small
     # TODO: Add back in leaf chains? -> or change decomp all together
@@ -569,9 +569,9 @@ class SubmapPlanner:
 
     path = []
 
-    print(ordered_submaps)
-    print(self.leaf_chains)
-    print()
+    # print(ordered_submaps)
+    # print(self.leaf_chains)
+    # print()
 
     # Setup
     initial_submap = submaps[ordered_submaps[0]]
@@ -591,9 +591,9 @@ class SubmapPlanner:
       if submaps[i].size_x <= allowable_submap_size or submaps[i].size_y <= allowable_submap_size:
         continue
 
-      print(cur_pos)
+      # print(cur_pos)
       movement = self.pathToNextSubmap(cur_pos, submaps[i])
-      print(movement, i)
+      # print(movement, i)
       path.extend(movement)
       cur_pos = Point(path[-1][0], path[-1][1])
       path.extend(self.lawnmower(cur_pos, submaps[i]))
