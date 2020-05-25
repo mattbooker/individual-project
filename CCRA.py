@@ -476,7 +476,7 @@ class CCRA:
     path = []
 
     # occupied = set()
-    # c = 0
+    c = 0
 
     # Follow the path of min cost
     while True:
@@ -516,7 +516,7 @@ class CCRA:
 
         # If we cant reach, return path
         if len(movement_to_unvisited) == 0:
-          return path
+          return self.process_path(path)
         else:
           path.extend(movement_to_unvisited)
       
@@ -525,3 +525,70 @@ class CCRA:
       else:
         current_pos = best_next_pos
         current_layer = best_next_layer
+
+  def process_path(self, path):
+    final_path = []
+
+    prev_pos, prev_layer = path[0]
+    for pos, layer in path:
+
+      # Check if we need to interpolate between two points
+      if abs(pos[0] - prev_pos[0]) > 1 or abs(pos[1] - prev_pos[1]) > 1:
+        layer_at_cell = self.interpolatePath(prev_pos, prev_layer, pos, layer)
+
+        assert layer_at_cell != None, "Could not find an intermediate path"
+
+        cells = raytrace(*prev_pos, *pos)
+
+        for c in cells:
+          final_path.append((c, layer_at_cell[c]))
+      else:
+        final_path.append((pos, layer))
+
+      prev_pos = pos
+      prev_layer = layer
+
+    return final_path
+
+  def interpolatePath(self, current_pos, current_layer, goal_pos, goal_layer):
+    # Get the direct path from current to goal
+    traversed_cells = raytrace(*current_pos, *goal_pos)
+
+    # Create this structure so we can efficiently get the next cell
+    next_cell = dict()
+
+    for num, cell in enumerate(traversed_cells[:-1]):
+      next_cell[cell] = traversed_cells[num + 1]
+
+    # depth first search through the path to find a suitable path
+    dfs = []
+    dfs.append((current_pos, current_layer))
+    visited = set()
+    layer_at_cell = dict()
+
+    while len(dfs) > 0:
+      pos, layer = dfs.pop()
+
+      if (pos, layer) in visited:
+        continue
+      else:
+        visited.add((pos, layer))
+
+      layer_at_cell[pos] = layer
+      
+      # Return True if we have reached the goal
+      if pos == goal_pos and layer == goal_layer:
+        return layer_at_cell
+
+      next_pos = next_cell[pos]
+        
+      # Check adjacent and current layers of next position to see if it can be reached from here
+      for i in [-1, 1, 0]:
+        next_layer = (layer + i) % 8
+        
+        if self.oriented_occ_grid[next_pos] & 2**next_layer == 0:
+          # print(pos, layer, next_pos, next_layer)
+          dfs.append((next_pos, next_layer))
+
+    # dfs didnt find a suitable path so return false
+    return None
