@@ -321,48 +321,47 @@ class SubmapPlanner:
     return (overall_direction, initial_direction, rotation_required)
 
   def pathToNextSubmap(self, cur_pos, next_submap):
+    corner_motions = []
+    corner_targets = []
 
-    # Pick the corner of the next submap that is closest to our current position
-    target_corner = next_submap.corners[0]
-    min_distance = cur_pos.distanceTo(target_corner)
+    for c in next_submap.corners:
+      overall_direction, initial_direction, rotation_required = self.getSweepDirection(next_submap, c)
+      corner_motions.append((overall_direction, initial_direction))
 
-    for i in next_submap.corners[1:]:
-      cur_dist = cur_pos.distanceTo(i)
+      goal = self.refineSubmapStartpoint(c, overall_direction, initial_direction)
+      goal_layer = int(not self.cur_rot) if rotation_required else self.cur_rot
 
-      if cur_dist < min_distance:
-        min_distance = cur_dist
-        target_corner = i
+      corner_targets.append((goal, goal_layer))
 
-    current_layer = self.cur_rot
 
-    overall_direction, initial_direction, rotation_required = self.getSweepDirection(next_submap, target_corner)
-    goal_point = self.refineSubmapStartpoint(target_corner, overall_direction, initial_direction)
+    path = self.dijkstra(cur_pos, corner_targets)
 
-    goal_layer = current_layer
-
-    if rotation_required:
-      goal_layer = int(not goal_layer)
+    selected_corner = (Point(path[-1][0], path[-1][1]), path[-1][2])
+    ind = corner_targets.index(selected_corner)
 
     # save the directions to the submap
-    next_submap.overall_direction = overall_direction
-    next_submap.initial_direction = initial_direction
+    next_submap.overall_direction = corner_motions[ind][0]
+    next_submap.initial_direction = corner_motions[ind][1]
 
-    # If already at goal return goal, otherwise use dijkstra to find path
-    if cur_pos == goal_point and current_layer == goal_layer:
-      return [(cur_pos.x, cur_pos.y, self.cur_rot)]
-    else:
-      return self.dijkstra(cur_pos, current_layer, goal_point, goal_layer)
+    return path
 
-  def dijkstra(self, start_pos, start_layer, goal_pos, goal_layer):
+  def dijkstra(self, start_pos, targets):
 
-    # assert self.inflated_occ_grid[start_layer][start_pos.x, start_pos.y] == 0
-    if self.inflated_occ_grid[goal_layer][goal_pos.x, goal_pos.y] != 0:
+    # Ensure a at least one corner is unoccupied
+    none_free = True
+    for g_pos, g_layer in targets:
+      if self.inflated_occ_grid[g_layer][g_pos.x, g_pos.y] == 0:
+        none_free = False
+    
+    if none_free:
       return []
 
     visited = [set(), set()]
     prev = [dict(), dict()]
     distance =  [defaultdict(lambda: float('inf')), defaultdict(lambda : float('inf'))]
     pq = []
+
+    start_layer = self.cur_rot
 
     distance[start_layer][start_pos] = 0
     prev[start_layer][start_pos] = None
@@ -375,18 +374,26 @@ class SubmapPlanner:
 
       next_layer = int(not current_layer)
 
+      # Check if one of the goals has been reached
+      reached_goal = False
+      for g_pos, g_layer in targets:
+        if current_pos == g_pos and current_layer == g_layer:
+          reached_goal = True
+          break
+
       # If we reached the goal then extract the path and reverse it
-      if current_pos == goal_pos and current_layer == goal_layer:
-        path = [(goal_pos.x, goal_pos.y, goal_layer)]
+      if reached_goal:
+        path = [(current_pos.x, current_pos.y, current_layer)]
 
-        cur_pos, cur_layer = prev[goal_layer][goal_pos]
+        pos = current_pos
+        layer = current_layer
 
-        while prev[cur_layer][cur_pos] != None:
-          path.append((cur_pos.x, cur_pos.y, cur_layer))
-          cur_pos, cur_layer = prev[cur_layer][cur_pos]
+        while prev[layer][pos] != None:
+          pos, layer = prev[layer][pos]
+          path.append((pos.x, pos.y, layer))
 
         # Rotate the block if the start and goal are different orientations
-        if goal_layer != start_layer:
+        if current_layer != start_layer:
           self.rotateBlock()
         
         # Reverse the path since it will be from goal to start and we want start to goal
