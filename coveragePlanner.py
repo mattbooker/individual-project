@@ -10,7 +10,7 @@ from pyrep.objects.vision_sensor import VisionSensor
 from gridSubmapper import GridSubmapper
 from occupancyGrid import OccupancyGrid
 from submapPlanner import SubmapPlanner
-from testing_tools import random_map_generator
+from testing_tools import randomMapGenerator
 from utils import Pose
 
 def setupOccGrid(occ_grid, vision_sensor):
@@ -32,6 +32,7 @@ def set2DPose(shape, pose):
 
 
 if __name__ == "__main__":
+
   # Set the random seed
   random.seed()
 
@@ -45,18 +46,19 @@ if __name__ == "__main__":
   robot = Shape('start_pose')
   vision_sensor = VisionSensor('vision_sensor')
 
-  # Compute block size from shape in simulation
-  bounding_box = robot.get_bounding_box()
-  block_size_x = int(round(bounding_box[1] - bounding_box[0], 3)/occ_grid.resolution)
-  block_size_y = int(round(bounding_box[3] - bounding_box[2], 3)/occ_grid.resolution)
 
   # Generate a random map
-  random_map_generator.generate_random_map(3)
+  randomMapGenerator.generate_random_map(3)
 
   # Setup occ_grid
   occ_grid = OccupancyGrid()
   setupOccGrid(occ_grid, vision_sensor)
 
+  # Compute block size from shape in simulation
+  bounding_box = robot.get_bounding_box()
+  block_size_x = int(round(bounding_box[1] - bounding_box[0], 3)/occ_grid.resolution)
+  block_size_y = int(round(bounding_box[3] - bounding_box[2], 3)/occ_grid.resolution)
+  
   submapper = GridSubmapper(occ_grid)
   submapper.process()
 
@@ -83,6 +85,8 @@ if __name__ == "__main__":
     pose = Pose(wx, wy, math.radians(p[2] * 90))
     # print(wx, wy)
     set2DPose(robot, pose)
+    pr.step()
+    # time.sleep(0.01)
 
     # Visualization
     new_coverage = OccupancyGrid()
@@ -95,15 +99,6 @@ if __name__ == "__main__":
 
     coverage_grid.draw()
     pr.step()
-
-  # print(coverage_grid)
-
-  # visualization_grid = submapper.visualization()
-  # print(visualization_grid)
-  # print()
-  # print(planner.inflated_occ_grid[0])
-  # print()
-  # print(planner.inflated_occ_grid[1])
 
   # End Simulation
   pr.stop()
