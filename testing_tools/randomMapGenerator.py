@@ -10,7 +10,7 @@ from pyrep.objects.shape import Shape
 from pyrep.objects.vision_sensor import VisionSensor
 
 
-def generate_random_map(total_objects, non_rectilinear=False):
+def generate_random_map(total_objects, rectilinear=True):
 
 	# Set the random seed in the main module
 
@@ -34,7 +34,7 @@ def generate_random_map(total_objects, non_rectilinear=False):
 			random_x_pos = random.uniform(random_x_size/2, size_x - random_x_size/2) - 0.5
 			random_y_pos = random.uniform(random_y_size/2, size_y - random_y_size/2) - 0.5
 			
-			yaw = random.uniform(0, math.pi) if non_rectilinear else 0
+			yaw = 0 if rectilinear else random.uniform(0, math.pi)
 
 			new_shape = Shape.create(type=PrimitiveShape.CUBOID, 
 															 size=[random_x_size,random_y_size,.05], 
