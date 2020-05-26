@@ -336,12 +336,13 @@ class SubmapPlanner:
 
     path = self.dijkstra(cur_pos, corner_targets)
 
-    selected_corner = (Point(path[-1][0], path[-1][1]), path[-1][2])
-    ind = corner_targets.index(selected_corner)
+    if len(path) != 0:
+      selected_corner = (Point(path[-1][0], path[-1][1]), path[-1][2])
+      ind = corner_targets.index(selected_corner)
 
-    # save the directions to the submap
-    next_submap.overall_direction = corner_motions[ind][0]
-    next_submap.initial_direction = corner_motions[ind][1]
+      # save the directions to the submap
+      next_submap.overall_direction = corner_motions[ind][0]
+      next_submap.initial_direction = corner_motions[ind][1]
 
     return path
 
