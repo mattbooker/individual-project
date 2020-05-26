@@ -1,10 +1,12 @@
-from intervaltree import IntervalTree
 import heapq as h
-from collections import defaultdict
-import numpy as np
 import math
+from collections import defaultdict
 
-from utils import Point, Pose, Direction
+import numpy as np
+from intervaltree import IntervalTree
+
+from utils import Direction, Point, Pose
+
 
 class SubmapPlanner:
   def __init__(self, occ_grid, block_size_x, block_size_y):
@@ -513,6 +515,7 @@ class SubmapPlanner:
       cur_pos = Point(path[-1][0], path[-1][1])
       path.extend(self.lawnmower(cur_pos, submaps[i]))
       cur_pos = Point(path[-1][0], path[-1][1])
+      # return path
 
     # movement = self.pathToNextSubmap(cur_pos, submaps[6])
     # print(movement)
