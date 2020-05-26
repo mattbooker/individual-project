@@ -1,5 +1,8 @@
 from collections import defaultdict
 
+import cv2
+import numpy as np
+
 from maximumIndependentSet import MaximumIndependentSet
 from occupancyGrid import OccupancyGrid
 from utils import Direction, Point, Submap
@@ -674,6 +677,25 @@ class GridSubmapper:
     self.definite_rectangles.extend(definite_remaining_rectangles)
     self.possible_rectangles.update(possible_remaining_rectangles)
 
+  def handleNonRectangularRegions(self):
+    difference = self.rectilinear_occ_grid.grid - self.occ_grid.grid
+    difference[difference <= 0] = 0
+    difference = np.uint8(difference)
+
+    contours, _ = cv2.findContours(difference, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+
+    for shape in contours:
+
+      # Convert the numpy array to list of tuples
+      points = [(x,y) for y,x in shape.reshape(len(shape), 2)]
+
+      # Dont bother if there are less than 4 points (findContours returns all points of the shapes edge)
+      if len(points) <= 4:
+        continue
+    
+      non_rectangle_submap = Submap(points, False)
+      self.submaps.append(non_rectangle_submap)
+      
   def visualization(self):
     visual_grid = self.rectilinear_occ_grid.clone()
 
@@ -699,6 +721,9 @@ class GridSubmapper:
 
       # Extract
       self.extractSubmaps()
+
+      # Need to handle the remaining non rectangular regions
+      self.handleNonRectangularRegions()
     
     # If no corners were found then use the whole map as a submap
     else:

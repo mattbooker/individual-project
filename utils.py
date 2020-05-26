@@ -1,6 +1,7 @@
 from enum import Enum
 from math import sqrt
 
+
 def raytrace(x0, y0, x1, y1):
 
   # Uses bresenham2d for raytracing
@@ -131,30 +132,54 @@ class Direction(Enum):
       return False
 
 class Submap:
-  def __init__(self, corners : [Point]):
+  def __init__(self, corners : [Point], is_rectangle= True):
     # Clockwise order of corners
     self.corners = corners
+    self.is_rectangle = is_rectangle
 
-    self.size_x = abs(corners[0].x - corners[2].x) + 1
-    self.size_y = abs(corners[0].y - corners[2].y) + 1
-    
-    # Get max and min values
-    self.min_x = min(self.corners, key=lambda p: p.x).x
-    self.min_y = min(self.corners, key=lambda p: p.y).y
+    if is_rectangle:
+      self.size_x = abs(corners[0].x - corners[2].x) + 1
+      self.size_y = abs(corners[0].y - corners[2].y) + 1
+      
+      # Get max and min values
+      self.min_x = min(self.corners, key=lambda p: p.x).x
+      self.min_y = min(self.corners, key=lambda p: p.y).y
 
-    self.max_x = max(self.corners, key=lambda p: p.x).x
-    self.max_y = max(self.corners, key=lambda p: p.y).y
+      self.max_x = max(self.corners, key=lambda p: p.x).x
+      self.max_y = max(self.corners, key=lambda p: p.y).y
 
-    # Rounds down
-    self.centre_x = (self.max_x + self.min_x)//2
-    self.centre_y = (self.max_y + self.min_y)//2
+      # Rounds down
+      self.centre_x = (self.max_x + self.min_x)//2
+      self.centre_y = (self.max_y + self.min_y)//2
 
     # Sweep directions
     self.overall_direction = None
     self.initial_direction = None
 
   def range(self):
-    for j in range(self.min_y, self.max_y + 1):
-      for i in range(self.min_x, self.max_x + 1):
-        yield (i,j)
 
+    values = []
+
+    if self.is_rectangle:
+      # Simple iteration over bounds
+      for j in range(self.min_y, self.max_y + 1):
+        for i in range(self.min_x, self.max_x + 1):
+          values.append((i,j))
+    else:
+      # Column scan
+      bottom_bound = dict()
+      for (i, j) in self.corners:
+
+        if i not in bottom_bound:
+          bottom_bound[i] = j
+        elif j < bottom_bound[i]:
+          bottom_bound[i] = j
+
+      for (i, j) in self.corners:
+
+        lower_bound = bottom_bound[i]
+
+        for k in range(lower_bound, j + 1):
+          values.append((i, k))
+
+    return values
