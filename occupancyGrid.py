@@ -60,13 +60,13 @@ class OccupancyGrid:
     # Set the colormap for drawing
     base_cmap = plt.cm.Reds
 
-    cmaplist = ['k', 'w'] + [base_cmap(i) for i in range(50,250,25)]
+    cmaplist = ['k', 'w'] + [base_cmap(i) for i in range(20,255,15)]
 
     # create the new map
-    cmap = mpl.colors.LinearSegmentedColormap.from_list('Custom cmap', cmaplist, 10)
+    cmap = mpl.colors.LinearSegmentedColormap.from_list('Custom cmap', cmaplist, len(cmaplist))
 
     # define the bins and normalize
-    bounds = np.linspace(-1, 9, 11)
+    bounds = np.linspace(-1, len(cmaplist) - 2, len(cmaplist))
     norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
 
     self.fig = plt.figure(figsize=(6,12))
@@ -88,7 +88,7 @@ class OccupancyGrid:
 
     self.t = 0
 
-    self.fig.colorbar(self.im, ax=self.ax0)
+    # self.fig.colorbar(self.im, ax=self.ax0)
     plt.show(block=False)
 
   def draw(self):
