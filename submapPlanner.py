@@ -81,8 +81,7 @@ class SubmapPlanner:
 
     # print(x_intervals)
     # print(y_intervals)
-
-    self.adj_matrix = np.zeros((len(submaps), len(submaps)))
+    adj_list = [[] for i in range(len(submaps))]
 
     for num, a in enumerate(submaps):
       left_edge = x_intervals[a.min_x - 1]
@@ -97,13 +96,13 @@ class SubmapPlanner:
         if a.min_y >= b.min_y:
           if a.min_y <= b.max_y:
             # Case A or C
-            self.adj_matrix[num][interval.data] = 1
+            adj_list[num].append(interval.data)
         elif a.max_y >= b.min_y:
           # Case B
-          self.adj_matrix[num][interval.data] = 1
+          adj_list[num].append(interval.data)
         elif a.max_y >= b.max_y:
           # Case D
-          self.adj_matrix[num][interval.data] = 1
+          adj_list[num].append(interval.data)
 
       # Right edge
       for interval in right_edge:
@@ -112,13 +111,13 @@ class SubmapPlanner:
         if a.min_y >= b.min_y:
           if a.min_y <= b.max_y:
             # Case A or C
-            self.adj_matrix[num][interval.data] = 1
+            adj_list[num].append(interval.data)
         elif a.max_y >= b.min_y:
           # Case B
-          self.adj_matrix[num][interval.data] = 1
+          adj_list[num].append(interval.data)
         elif a.max_y >= b.max_y:
           # Case D
-          self.adj_matrix[num][interval.data] = 1
+          adj_list[num].append(interval.data)
 
       # Top Edge
       for interval in top_edge:
@@ -127,13 +126,13 @@ class SubmapPlanner:
         if a.min_x >= b.min_x:
           if a.min_x <= b.max_x:
             # Case A or C
-            self.adj_matrix[num][interval.data] = 1
+            adj_list[num].append(interval.data)
         elif a.max_x >= b.min_x:
           # Case B
-          self.adj_matrix[num][interval.data] = 1
+          adj_list[num].append(interval.data)
         elif a.max_x >= b.max_x:
           # Case D
-          self.adj_matrix[num][interval.data] = 1
+          adj_list[num].append(interval.data)
 
       # Bottom Edge
       for interval in bottom_edge:
@@ -142,122 +141,49 @@ class SubmapPlanner:
         if a.min_x >= b.min_x:
           if a.min_x <= b.max_x:
             # Case A or C
-            self.adj_matrix[num][interval.data] = 1
+            adj_list[num].append(interval.data)
         elif a.max_x >= b.min_x:
           # Case B
-          self.adj_matrix[num][interval.data] = 1
+          adj_list[num].append(interval.data)
         elif a.max_x >= b.max_x:
           # Case D
-          self.adj_matrix[num][interval.data] = 1
+          adj_list[num].append(interval.data)
 
-  def findLeafChains(self):
-    altered_adj_matrix = np.copy(self.adj_matrix)
+    return adj_list
 
-    leaf_chain_idx = -1
+  def shortestAllSubmapsPath(self, adj_list):
+    n = len(adj_list)
+    dist = [[float('inf')] * n for i in range(1 << n)]
+    paths = [[None] * n for i in range(1 << n)]
 
-    for i in range(len(altered_adj_matrix)):
-      to_remove = i
-      
-      first = True
+    # Initialize tables
+    for x in range(n):
+      dist[1 << x][x] = 0
+      paths[1<<x][x] = [x]
 
-      while to_remove != None:
-        if np.count_nonzero(altered_adj_matrix[to_remove]) == 1:
-          next_to_remove = np.nonzero(altered_adj_matrix[to_remove])[0]
+    # Run the DP algorithm
+    for cover in range(1 << n):
+      repeat = True
 
-          altered_adj_matrix[to_remove] = np.zeros(len(self.adj_matrix))
-          altered_adj_matrix[:,to_remove] = 0
+      while repeat:
+        repeat = False
+        
+        for head, d in enumerate(dist[cover]):
+          for nei in adj_list[head]:
+            cover2 = cover | (1 << nei)
+		
+            if d + 1 < dist[cover2][nei]:
+              dist[cover2][nei] = d + 1
+              paths[cover2][nei] = paths[cover][head] + [nei]
 
-          if first:
-            leaf_chain_idx += 1
-            self.leaf_chains.append([])
-            first = False
+              if cover == cover2:
+                repeat = True
 
-          self.leaf_chains[leaf_chain_idx].append((to_remove, next_to_remove[0]))
+    # Get the index of lowest cost path
+    ind = dist[(1<<n) - 1].index(min(dist[(1<<n) - 1]))
 
-          to_remove = next_to_remove[0]
-        else:
-          to_remove = None
-
-  def seperateLeafChains(self):
-    self.findLeafChains()
-
-    # Flattens the leaf chains (Can save time by sorting here if needed)
-    removed = [item[0] for sublist in self.leaf_chains for item in sublist]
-
-    sorted_removed = list(sorted(removed, reverse=True))
-
-    new_matrix_size = len(self.adj_matrix) - len(removed)
-
-    # If the new matrix is to have nothing in it return None
-    if new_matrix_size == 0:
-      return None
-
-    # delete the rows and columns of leaf chains within the adj_matrix
-    new_matrix = np.delete(self.adj_matrix, sorted_removed, 0)
-    new_matrix = np.delete(new_matrix, sorted_removed, 1)
-
-    # Create the idx_map that helps to retrieve the original indexs of the submaps
-    # i.e. self.idx_map[idx in reduced matrix] = idx in original matrix
-    non_removed = [i for i in range(len(self.adj_matrix)) if i not in sorted_removed]
-    self.idx_map = dict([(i, j) for i,j in zip(range(new_matrix_size), non_removed)])
-
-    return new_matrix
-
-  def heldKarp(self, reduced_adj_matrix):
-    num_of_vertices = len(reduced_adj_matrix)
-    self.dp_table = np.zeros((num_of_vertices, 2**num_of_vertices))
-
-    for i in range(num_of_vertices):
-      self.dp_table[i][2**i] = True
-      
-    for i in range(2**num_of_vertices):
-      for j in range(num_of_vertices):
-        if i & (2**j):
-          for k in range(num_of_vertices):
-            if i & (2**k) and reduced_adj_matrix[k][j] and k != j and self.dp_table[k][i ^ (2**j)]:
-              self.dp_table[j][i] = True
-
-    for i in range(num_of_vertices):
-      if self.dp_table[i][2**num_of_vertices - 1]:
-        return True
-
-    return False
-
-  def getHamiltonianPath(self, reduced_adj_matrix):
-    
-    start_vertex = 0
-
-    # Get the first vertex that satisfies the hamiltonian path
-    for i in range(self.dp_table.shape[0]):
-      if self.dp_table[i][-1]:
-        start_vertex = i
-        break
-
-    current_vertex = start_vertex
-    table_bits = 2 ** len(reduced_adj_matrix) - 1
-
-    visited = set()
-
-    path = []
-
-    for i in range(len(reduced_adj_matrix)):
-
-      visited.add(current_vertex)
-      path.append(current_vertex)
-
-      neighbours = [idx for idx in range(len(reduced_adj_matrix)) if reduced_adj_matrix[current_vertex][idx] == 1]
-
-      for nbr in neighbours:
-        if nbr not in visited:
-          if self.dp_table[nbr][table_bits^ 2**current_vertex]:
-            table_bits = table_bits ^ 2**current_vertex
-            current_vertex = nbr
-            break
-
-    # TODO: Remove? used to ensure we get a path that traverses all nodes in the graph
-    assert len(path) == len(reduced_adj_matrix)
-
-    return path
+    # Return path that had the lowest cost
+    return paths[(1 << n) - 1][ind]
 
   def rotateBlock(self):
     self.block_size_x, self.block_size_y = self.block_size_y, self.block_size_x
@@ -421,8 +347,6 @@ class SubmapPlanner:
     next_submap.overall_direction = overall_direction
     next_submap.initial_direction = initial_direction
 
-    print(cur_pos, current_layer, goal_point, goal_layer)
-
     # If already at goal return goal, otherwise use dijkstra to find path
     if cur_pos == goal_point and current_layer == goal_layer:
       return [(cur_pos.x, cur_pos.y, self.cur_rot)]
@@ -432,7 +356,8 @@ class SubmapPlanner:
   def dijkstra(self, start_pos, start_layer, goal_pos, goal_layer):
 
     # assert self.inflated_occ_grid[start_layer][start_pos.x, start_pos.y] == 0
-    assert self.inflated_occ_grid[goal_layer][goal_pos.x, goal_pos.y] == 0
+    if self.inflated_occ_grid[goal_layer][goal_pos.x, goal_pos.y] != 0:
+      return []
 
     visited = [set(), set()]
     prev = [dict(), dict()]
@@ -503,6 +428,8 @@ class SubmapPlanner:
 
             h.heappush(pq, (alternate_dist, (p, next_layer)))
 
+    return []
+
   def refineSubmapStartpoint(self, target_corner, overall_direction, initial_direction):
 
     target_point = target_corner.copy()
@@ -543,39 +470,14 @@ class SubmapPlanner:
 
   def getPath(self, submaps):
 
-    # TODO: Handle submaps that are too small
-    # TODO: Add back in leaf chains? -> or change decomp all together
+    adj_list = self.createGraphFromSubmaps(submaps)
 
-
-    # TODO: Add more layers to planner?
-
-    self.createGraphFromSubmaps(submaps)
-
-    # TODO: The optimal start and end vertex would be those that are attached to the two longest chains (so we dont need to back track them
-    reduced_adj_matrix = self.seperateLeafChains()
-    ordered_submaps = []
-
-    if reduced_adj_matrix is not None:
-      hamiltonian_path_exists = self.heldKarp(reduced_adj_matrix)
-    
-      if hamiltonian_path_exists:
-        ordered_submaps = self.getHamiltonianPath(reduced_adj_matrix)
-
-      ordered_submaps = list(map(lambda n: self.idx_map[n], ordered_submaps))
-
-    else:
-      ordered_submaps = submaps
-
+    submap_visit_order = self.shortestAllSubmapsPath(adj_list)
 
     path = []
 
-    # print(ordered_submaps)
-    # print(self.leaf_chains)
-    # print()
-
     # Setup
-    initial_submap = submaps[ordered_submaps[0]]
-    # initial_submap = submaps[6]
+    initial_submap = submaps[submap_visit_order[0]]
     cur_pos = initial_submap.corners[0]
     overall_direction, initial_direction, rotation_required = self.getSweepDirection(initial_submap, cur_pos)
     cur_pos = self.refineSubmapStartpoint(cur_pos, overall_direction, initial_direction)
@@ -585,7 +487,7 @@ class SubmapPlanner:
 
     allowable_submap_size = min(self.block_size_x, self.block_size_y)
 
-    for i in ordered_submaps:
+    for i in submap_visit_order:
       # print('====== Submap ' + str(i) +  '=====')
 
       if submaps[i].size_x <= allowable_submap_size or submaps[i].size_y <= allowable_submap_size:
@@ -594,6 +496,11 @@ class SubmapPlanner:
       # print(cur_pos)
       movement = self.pathToNextSubmap(cur_pos, submaps[i])
       # print(movement, i)
+
+      # Occurs when we cant find a path into the submap
+      if len(movement) == 0:
+        continue
+
       path.extend(movement)
       cur_pos = Point(path[-1][0], path[-1][1])
       path.extend(self.lawnmower(cur_pos, submaps[i]))
