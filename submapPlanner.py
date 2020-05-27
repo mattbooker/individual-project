@@ -1,8 +1,10 @@
 import heapq as h
 import math
-from collections import defaultdict
+import time
+from collections import defaultdict, deque
 
 import numpy as np
+from scipy.spatial import distance_matrix
 from intervaltree import IntervalTree
 
 from utils import Direction, Point, Pose
@@ -19,12 +21,6 @@ class SubmapPlanner:
     self.block_size_y = block_size_y
 
     self.cur_rot = 0
-
-    self.adj_matrix = None
-    self.dp_table = None
-
-    self.leaf_chains = []
-    self.idx_map = dict()  
 
   def generateInflatedOccGrid(self, occ_grid, footprint_x, footprint_y):
 
@@ -83,9 +79,11 @@ class SubmapPlanner:
 
     # print(x_intervals)
     # print(y_intervals)
+
     adj_list = [[] for i in range(len(submaps))]
 
     for num, a in enumerate(submaps):
+    
       left_edge = x_intervals[a.min_x - 1]
       right_edge = x_intervals[a.max_x + 1]
       top_edge = y_intervals[a.min_y - 1]
@@ -153,39 +151,94 @@ class SubmapPlanner:
 
     return adj_list
 
-  def shortestAllSubmapsPath(self, adj_list):
+  def createDistMat(self, adj_list, submaps):
+    def bfs(start, end):
+      bfs = deque()
+      bfs.append(start)
+
+      prev = dict()
+      dist = defaultdict(lambda: float('inf'))
+      visited = set()
+
+      prev[start] = None
+      dist[start] = 0
+
+      while len(bfs) > 0:
+        cur = bfs.popleft()
+
+        if cur in visited:
+          continue
+        else:
+          visited.add(cur)
+
+        if cur == end:
+          path = []
+          tmp = cur
+
+          while prev[tmp] != None:
+            path.append(tmp)
+            tmp = prev[tmp]
+
+          return [start] + path[::-1]
+
+        for nbr in adj_list[cur]:
+          new_dist = dist[cur] + dist_mat[cur][nbr]
+
+          if new_dist < dist[nbr]:
+            dist[nbr] = new_dist
+            prev[nbr] = cur
+            bfs.append(nbr)
+
+      return []
+
     n = len(adj_list)
-    dist = [[float('inf')] * n for i in range(1 << n)]
-    paths = [[None] * n for i in range(1 << n)]
 
-    # Initialize tables
-    for x in range(n):
-      dist[1 << x][x] = 0
-      paths[1<<x][x] = [x]
+    points = []
+    for s in submaps:
+      points.append([s.centre_x, s.centre_y])
 
-    # Run the DP algorithm
-    for cover in range(1 << n):
-      repeat = True
+    dist_mat = distance_matrix(points, points)
+    updated_dist_mat = dist_mat.copy()
 
-      while repeat:
-        repeat = False
-        
-        for head, d in enumerate(dist[cover]):
-          for nei in adj_list[head]:
-            cover2 = cover | (1 << nei)
-		
-            if d + 1 < dist[cover2][nei]:
-              dist[cover2][nei] = d + 1
-              paths[cover2][nei] = paths[cover][head] + [nei]
+    for i in range(n):
+      for j in range(n):
+        if i == j:
+          continue
 
-              if cover == cover2:
-                repeat = True
+        if j not in adj_list[i]:
+          shortest_path = bfs(i, j)
+          
+          new_dist = 0
+          for k in range(len(shortest_path) - 1):
+            cur = shortest_path[k]
+            nxt = shortest_path[k+1]
+            new_dist += dist_mat[cur][nxt]
 
-    # Get the index of lowest cost path
-    ind = dist[(1<<n) - 1].index(min(dist[(1<<n) - 1]))
+          updated_dist_mat[i][j] = new_dist
 
-    # Return path that had the lowest cost
-    return paths[(1 << n) - 1][ind]
+    return updated_dist_mat
+
+  def nearestNeighbourTSP(self, adj_list, submaps):
+    
+    dist_mat = self.createDistMat(adj_list, submaps)
+
+    # Start at submap 0
+    current_node = 0
+
+    n = len(adj_list)
+    unvisited_nodes = [i for i in range(1, n)]
+    visited_nodes = [current_node]
+
+    while n > len(visited_nodes):      
+      # Pick the lowest cost unvisited
+      cheapest_node = unvisited_nodes[np.argmin(dist_mat[current_node][unvisited_nodes])]
+
+      # Remove the chosen node from unvisited, add to visited, and update to current
+      unvisited_nodes.remove(cheapest_node)
+      current_node = cheapest_node
+      visited_nodes.append(current_node)
+
+    return visited_nodes
 
   def rotateBlock(self):
     self.block_size_x, self.block_size_y = self.block_size_y, self.block_size_x
@@ -481,8 +534,7 @@ class SubmapPlanner:
   def getPath(self, submaps):
 
     adj_list = self.createGraphFromSubmaps(submaps)
-
-    submap_visit_order = self.shortestAllSubmapsPath(adj_list)
+    submap_visit_order = self.nearestNeighbourTSP(adj_list, submaps)
 
     path = []
 
@@ -498,14 +550,11 @@ class SubmapPlanner:
     allowable_submap_size = min(self.block_size_x, self.block_size_y)
 
     for i in submap_visit_order:
-      # print('====== Submap ' + str(i) +  '=====')
 
       if submaps[i].size_x <= allowable_submap_size or submaps[i].size_y <= allowable_submap_size:
         continue
 
-      # print(cur_pos)
       movement = self.pathToNextSubmap(cur_pos, submaps[i])
-      # print(movement, i)
 
       # Occurs when we cant find a path into the submap
       if len(movement) == 0:
@@ -516,9 +565,5 @@ class SubmapPlanner:
       path.extend(self.lawnmower(cur_pos, submaps[i]))
       cur_pos = Point(path[-1][0], path[-1][1])
       # return path
-
-    # movement = self.pathToNextSubmap(cur_pos, submaps[6])
-    # print(movement)
-    # path.extend(self.lawnmower(cur_pos, submaps[6]))
 
     return path
