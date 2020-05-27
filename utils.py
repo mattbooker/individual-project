@@ -137,20 +137,32 @@ class Submap:
     self.corners = corners
     self.is_rectangle = is_rectangle
 
+    # Get max and min values
+    self.min_x = min(self.corners, key=lambda p: p.x).x
+    self.min_y = min(self.corners, key=lambda p: p.y).y
+
+    self.max_x = max(self.corners, key=lambda p: p.x).x
+    self.max_y = max(self.corners, key=lambda p: p.y).y
+    
     if is_rectangle:
       self.size_x = abs(corners[0].x - corners[2].x) + 1
       self.size_y = abs(corners[0].y - corners[2].y) + 1
-      
-      # Get max and min values
-      self.min_x = min(self.corners, key=lambda p: p.x).x
-      self.min_y = min(self.corners, key=lambda p: p.y).y
-
-      self.max_x = max(self.corners, key=lambda p: p.x).x
-      self.max_y = max(self.corners, key=lambda p: p.y).y
 
       # Rounds down
       self.centre_x = (self.max_x + self.min_x)//2
       self.centre_y = (self.max_y + self.min_y)//2
+    else:
+      all_points = self.range()
+      total_x = 0
+      total_y = 0
+
+      for x,y in all_points:
+        total_x += x
+        total_y += y
+
+      self.centre_x = total_x//len(all_points)
+      self.centre_y = total_y//len(all_points)
+    
 
     # Sweep directions
     self.overall_direction = None
@@ -158,28 +170,28 @@ class Submap:
 
   def range(self):
 
-    values = []
+    values = set()
 
     if self.is_rectangle:
       # Simple iteration over bounds
       for j in range(self.min_y, self.max_y + 1):
         for i in range(self.min_x, self.max_x + 1):
-          values.append((i,j))
+          values.add((i,j))
     else:
       # Column scan
       bottom_bound = dict()
-      for (i, j) in self.corners:
+      for point in self.corners:
 
-        if i not in bottom_bound:
-          bottom_bound[i] = j
-        elif j < bottom_bound[i]:
-          bottom_bound[i] = j
+        if point.x not in bottom_bound:
+          bottom_bound[point.x] = point.y
+        elif point.y < bottom_bound[point.x]:
+          bottom_bound[point.x] = point.y
 
-      for (i, j) in self.corners:
+      for point in self.corners:
 
-        lower_bound = bottom_bound[i]
+        lower_bound = bottom_bound[point.x]
 
-        for k in range(lower_bound, j + 1):
-          values.append((i, k))
+        for k in range(lower_bound, point.y + 1):
+          values.add((point.x, k))
 
-    return values
+    return list(values)
