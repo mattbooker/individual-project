@@ -687,7 +687,7 @@ class GridSubmapper:
     for shape in contours:
 
       # Convert the numpy array to list of tuples
-      points = [(x,y) for y,x in shape.reshape(len(shape), 2)]
+      points = [Point(x,y) for x, y in shape.reshape(len(shape), 2)]
 
       # Dont bother if there are less than 4 points (findContours returns all points of the shapes edge)
       if len(points) <= 4:
