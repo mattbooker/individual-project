@@ -688,24 +688,23 @@ class GridSubmapper:
 
       # Convert the numpy array to list of tuples
       points = [Point(x,y) for x, y in shape.reshape(len(shape), 2)]
-
-      # Dont bother if there are less than 4 points (findContours returns all points of the shapes edge)
-      if len(points) <= 4:
-        continue
     
       non_rectangle_submap = Submap(points, False)
+
       self.submaps.append(non_rectangle_submap)
       
   def visualization(self):
     visual_grid = self.rectilinear_occ_grid.clone()
+    visual_grid.grid[visual_grid.grid > 0] = -1
+    visual_grid.grid[visual_grid.grid < 0] = 0
 
     for num, submap in enumerate(self.submaps):
       for (x, y) in submap.range():
-        visual_grid[x, y] = num + 2
+        visual_grid[x, y] = num
 
     return visual_grid
 
-  def process(self):
+  def process(self, block_size_x, block_size_y):
     # Find the concave corners
     concave_corners = self.getCorners()
 
@@ -730,5 +729,21 @@ class GridSubmapper:
       self.rectilinear_occ_grid[0, 0] = Direction.RIGHT.value
       entire_map = self.makeRectangle(0, 0, self.possible_rectangles)
       self.submaps.append(entire_map)
+
+    # Finally prune out submaps that are smaller than 50 cells or where the minimum size is smaller than our sweeper
+    final_submaps = []
+    for s in self.submaps:
+
+      # Skip if less than 50 cells
+      if len(s.range()) < 50:
+        continue
+
+      # Skip if smallest edge of submap is smaller than our block
+      if s.is_rectangle and min(block_size_x, block_size_y) > min(s.size_x, s.size_y):
+        continue
+
+      final_submaps.append(s)
+
+    self.submaps = final_submaps
 
     return self.submaps
