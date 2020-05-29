@@ -144,13 +144,14 @@ class Submap:
     self.max_x = max(self.corners, key=lambda p: p.x).x
     self.max_y = max(self.corners, key=lambda p: p.y).y
     
-    if is_rectangle:
-      self.size_x = abs(corners[0].x - corners[2].x) + 1
-      self.size_y = abs(corners[0].y - corners[2].y) + 1
+    self.size_x = self.max_x - self.min_x + 1
+    self.size_y = self.max_y - self.min_y + 1
 
+    if is_rectangle:
       # Rounds down
       self.centre_x = (self.max_x + self.min_x)//2
       self.centre_y = (self.max_y + self.min_y)//2
+      
     else:
       all_points = self.range()
       total_x = 0
