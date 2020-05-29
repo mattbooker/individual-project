@@ -543,8 +543,9 @@ class GridSubmapper:
         elif occupied[2] and occupied[3]:
           direction_of_corner = Direction.LEFT
       
-      # if direction_of_corner == None:
-      #   print(occupied)
+      if direction_of_corner == None:
+        # print(occupied)
+        continue
 
       # Set the cell to have the correct direction and then make a submap
       self.rectilinear_occ_grid[cell.x, cell.y] = direction_of_corner.value
