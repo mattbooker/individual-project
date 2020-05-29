@@ -511,6 +511,7 @@ class SubmapPlanner:
     visited = [set() for i in range(8)]
     prev = [dict() for i in range(8)]
     distance =  [defaultdict(lambda: float('inf')) for i in range(8)]
+    target_set = set([(p.x, p.y, l) for p,l in targets])
     pq = []
 
     distance[start_layer][start_pos] = 0
@@ -524,11 +525,9 @@ class SubmapPlanner:
 
       # Check if one of the goals has been reached
       reached_goal = False
-      for g_pos, g_layer in targets:
 
-        if current_pos == g_pos and current_layer == g_layer:
-          reached_goal = True
-          break
+      if (current_pos.x, current_pos.y, current_layer) in target_set:
+        reached_goal = True
 
       # If we reached the goal then extract the path and reverse it
       if reached_goal:
