@@ -460,8 +460,8 @@ class CCRA:
     # Compute distance grid
     self.computeDistances(start)
     
-    traversable_mask = self.oriented_occ_grid.grid == 255
-    masked_dist_grid =  np.ma.MaskedArray(self.dist_grid.grid, mask=traversable_mask)
+    # traversable_mask = self.oriented_occ_grid.grid == 255
+    # masked_dist_grid =  np.ma.MaskedArray(self.dist_grid.grid, mask=traversable_mask)
 
     current_pos = start
 
@@ -476,10 +476,11 @@ class CCRA:
     path = []
 
     # occupied = set()
-    c = 0
+    # c = 0
 
     # Follow the path of min cost
     while True:
+
       min_cost = float('inf')
       best_next_pos = None
       best_next_layer = None
