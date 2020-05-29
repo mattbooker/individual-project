@@ -480,8 +480,6 @@ class CCRA:
 
     # Follow the path of min cost
     while True:
-      current_cost = self.dist_grid[current_pos]
-
       min_cost = float('inf')
       best_next_pos = None
       best_next_layer = None
