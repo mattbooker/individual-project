@@ -520,7 +520,6 @@ class SubmapPlanner:
     h.heappush(pq, (0, (start_pos, start_layer)))
     
     while len(pq) > 0:
-
       current_dist, (current_pos, current_layer) = h.heappop(pq)
 
       # Check if one of the goals has been reached
@@ -551,7 +550,7 @@ class SubmapPlanner:
 
       prev_layer = (current_layer - 1) % 8
       next_layer = (current_layer + 1) % 8
-      candidates = list(zip(current_pos.nhood4(), [current_layer] * 4)) + [(current_pos, prev_layer), (current_pos, next_layer)]
+      candidates = list(zip(current_pos.nhood8(), [current_layer] * 8)) + [(current_pos, prev_layer), (current_pos, next_layer)]
 
       # Check distances to all neighbouring points
       for nbr_pos, nbr_layer in candidates:
@@ -559,7 +558,7 @@ class SubmapPlanner:
         # Skip if point is not in bounds or is occupied
         if (not self.oriented_occ_grid.inBounds(nbr_pos.x, nbr_pos.y)) or (self.oriented_occ_grid[nbr_pos.x, nbr_pos.y] & 2**nbr_layer != 0):
           continue
-
+        
 
         # If not previously visited then compute the current distance and compare to the stored distance for that point
         if nbr_pos not in visited[nbr_layer]:
@@ -679,7 +678,6 @@ class SubmapPlanner:
     return None
 
   def augmentedNhood4(self, cur_pos, cur_layer, dist_grid):
-    x = self.block_size_x
     location_offsets_unrotated = [(0, self.block_size_y), 
                                   (0, -self.block_size_y), 
                                   (self.block_size_x,0), 
@@ -696,7 +694,7 @@ class SubmapPlanner:
       rotated_x = int(round((x - ox) * math.cos(angle) - (y - oy) * math.sin(angle) + ox,0))
       rotated_y = int(round((x - ox) * math.sin(angle) + (y - oy) * math.cos(angle) + oy,0))
 
-      # Skip if out of x-bounds
+      # Skip if out of bounds
       if not dist_grid.inBounds(rotated_x, rotated_y):
         continue
 
@@ -815,7 +813,6 @@ class SubmapPlanner:
     pos = (cur_pos.x, cur_pos.y)
     layer = cur_layer
     path = []
-    c = 0
 
     # Follow the path of min cost
     while True:
@@ -827,7 +824,8 @@ class SubmapPlanner:
       visited = self.getVisitedCells(pos, layer)
 
       for i,j in visited:
-        dist_grid[i, j] = 0
+        if dist_grid.inBounds(i, j):
+          dist_grid[i, j] = 0
 
       for nbr_pos, nbr_layer in self.augmentedNhood4(pos, layer, dist_grid):
         
@@ -839,22 +837,22 @@ class SubmapPlanner:
       path.append((*pos, layer))
       dist_grid[pos] = 0
 
-      # DEBUGGING VISUALIZATION
-      # c += 1
-      # if c > 0:
-      #   plt.imshow(dist_grid.grid)
-      #   plt.pause(0.001)
-      #   plt.clf()
-      #   c = 0
-
-      # If the surrounding cells are all 0 (i.e. visited) then look to move to next best area
       if best_next_pos == None:
         return self.process_path(path)
       else:
         pos = best_next_pos
         layer = best_next_layer
 
-  def getPath(self, submaps):
+  def getStartPoint(self, init_submap):
+    start_pos = init_submap.corners[0]
+    overall_direction, initial_direction = self.getSweepDirection(init_submap, start_pos)
+    start_layer = self.rotationLayer(init_submap, overall_direction, initial_direction)
+    start_pos = self.refineSubmapStartpoint(start_pos, overall_direction, initial_direction)
+
+    return start_pos, start_layer
+
+
+  def getPath(self, submaps, only_start=False):
 
     adj_list = self.createGraphFromSubmaps(submaps)
     submap_visit_order = self.nearestNeighbourTSP(adj_list, submaps)
@@ -862,12 +860,11 @@ class SubmapPlanner:
     path = []
 
     # Setup
-    initial_submap = submaps[submap_visit_order[0]]
-    cur_pos = initial_submap.corners[0]
-    overall_direction, initial_direction = self.getSweepDirection(initial_submap, cur_pos)
-    cur_layer = self.rotationLayer(initial_submap, overall_direction, initial_direction)
-    cur_pos = self.refineSubmapStartpoint(cur_pos, overall_direction, initial_direction)
+    cur_pos, cur_layer = self.getStartPoint(submaps[submap_visit_order[0]])
 
+    if only_start:
+      return cur_pos
+ 
     self.rotationFix(cur_layer)
 
     for i in submap_visit_order:
@@ -877,8 +874,9 @@ class SubmapPlanner:
       # Occurs when we cant find a path into the submap
       if len(movement) == 0:
         print(f'Skipped submap {i}')
+        # print(f'cur_pos = {cur_pos, cur_layer}, occ = {bin(self.oriented_occ_grid[cur_pos.x, cur_pos.y])}')
         continue
-
+        
       path.extend(movement)
       cur_pos = Point(path[-1][0], path[-1][1])
       cur_layer = path[-1][2]
