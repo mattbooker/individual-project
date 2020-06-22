@@ -449,13 +449,13 @@ class CCRA:
 
     return occupied
 
-  def getPath(self):
+  def getPath(self, start = None):
     # Compute configuration space
     self.computeCSpace()
 
-    # TODO: Not the best way to do this -> want to start at most explorable point
-    # Generate a random start point within the cspace
-    start = self.generateRandomStart()
+    # Generate a random start point within the cspace if no start point given
+    if start is None:
+      start = self.generateRandomStart()
 
     # Compute distance grid
     self.computeDistances(start)
