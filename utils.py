@@ -1,6 +1,7 @@
 from enum import Enum
 from math import sqrt
-
+import numpy as np
+import cv2
 
 def raytrace(x0, y0, x1, y1):
 
@@ -53,6 +54,10 @@ class Point:
 
   def nhood4(self):
     return [self + Point(-1, 0), self + Point(0, -1), self + Point(1, 0), self + Point(0, 1)]
+  
+  def nhood8(self):
+    return [self + Point(-1, 0), self + Point(0, -1), self + Point(1, 0), self + Point(0, 1),
+            self + Point(-1, -1), self + Point(-1, 1), self + Point(1, -1), self + Point(1, 1)]
 
   def copy(self):
     return Point(self.x, self.y)
@@ -179,20 +184,14 @@ class Submap:
         for i in range(self.min_x, self.max_x + 1):
           values.add((i,j))
     else:
-      # Column scan
-      bottom_bound = dict()
-      for point in self.corners:
+      edge_points = np.array([[p.x, p.y] for p in self.corners])
 
-        if point.x not in bottom_bound:
-          bottom_bound[point.x] = point.y
-        elif point.y < bottom_bound[point.x]:
-          bottom_bound[point.x] = point.y
+      grid = np.zeros((100,100))
+      cv2.fillPoly(grid, pts=[edge_points], color=[1])
 
-      for point in self.corners:
+      indices = np.transpose(np.nonzero(grid))
 
-        lower_bound = bottom_bound[point.x]
-
-        for k in range(lower_bound, point.y + 1):
-          values.add((point.x, k))
+      for idx in indices:
+        values.add((idx[1], idx[0]))
 
     return list(values)
