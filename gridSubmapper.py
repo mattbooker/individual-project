@@ -2,6 +2,7 @@ from collections import defaultdict
 
 import cv2
 import numpy as np
+from matplotlib import pyplot as plt
 
 from maximumIndependentSet import MaximumIndependentSet
 from occupancyGrid import OccupancyGrid
@@ -695,9 +696,9 @@ class GridSubmapper:
       self.submaps.append(non_rectangle_submap)
       
   def visualization(self):
-    visual_grid = self.rectilinear_occ_grid.clone()
-    visual_grid.grid[visual_grid.grid > 0] = -1
+    visual_grid = self.occ_grid.clone()
     visual_grid.grid[visual_grid.grid < 0] = 0
+    visual_grid.grid[visual_grid.grid > 0] = -1
 
     for num, submap in enumerate(self.submaps):
       for (x, y) in submap.range():
