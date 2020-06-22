@@ -38,7 +38,7 @@ class OccupancyGrid:
       points = shape.reshape(len(shape), 2)
       max_x, max_y = np.amax(points, axis=0)
       min_x, min_y = np.amin(points, axis=0)
-
+      
       corners = [(min_x, min_y), (min_x, max_y), (max_x, max_y), (max_x, min_y)]
       cv2.rectangle(img_grey, (min_x, min_y), (max_x, max_y), 255, -1)
 
@@ -83,13 +83,16 @@ class OccupancyGrid:
     # Set the colormap for drawing
     base_cmap = plt.cm.Reds
 
-    cmaplist = ['k', 'w'] + [base_cmap(i) for i in range(20,255,15)]
+    cmaplist = ['w'] + [base_cmap(i) for i in range(0,255,15)]
 
     # create the new map
     cmap = mpl.colors.LinearSegmentedColormap.from_list('Custom cmap', cmaplist, len(cmaplist))
+    cmap.set_over(color='r')
+    cmap.set_under(color='k')
+    cmap.set_bad(color='k')
 
     # define the bins and normalize
-    bounds = np.linspace(-1, len(cmaplist) - 2, len(cmaplist))
+    bounds = np.linspace(0, len(cmaplist) - 2, len(cmaplist))
     norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
 
     self.fig = plt.figure(figsize=(6,12))
@@ -102,11 +105,11 @@ class OccupancyGrid:
 
     self.ax0.set_xticklabels([])
     self.ax0.set_yticklabels([])
-    self.ax0.title.set_text('Coverage Visualization')
+    # self.ax0.title.set_text('Coverage Visualization')
 
     self.ax1.set_ylim([0, 100])
     self.ax1.set_xticklabels([])
-    self.ax1.title.set_text('Coverage v.s. Time')
+    # self.ax1.title.set_text('Coverage v.s. Time')
     self.ax1.set_ylabel('Coverage %')
 
     self.t = 0
@@ -115,14 +118,18 @@ class OccupancyGrid:
     plt.show(block=False)
 
   def draw(self):
-    self.im.set_data(self.grid)
+    masked_grid = np.ma.masked_where(self.grid < 0, self.grid)
+    self.im.set_data(masked_grid)
 
     self.t += 1
-    covered = np.count_nonzero(self.grid > 0)
+
+    # Total free cells = size - # of obstacles cells
+    non_obstacle_cells_count = (self.size_x * self.size_y) - np.count_nonzero(self.grid < 0)
+    covered_cells_count = np.count_nonzero(self.grid > 0)
     
     # Dont create a line for every timestep -> will become very slow
-    if self.t % 8 == 0:
-      self.line, = self.ax1.plot(self.t,covered/(self.size_x * self.size_y) * 100, 'bo')
+    if self.t % 10 == 0:
+      self.line, = self.ax1.plot(self.t, covered_cells_count/non_obstacle_cells_count * 100, 'bo')
 
     self.fig.canvas.draw()
     self.ax0.draw_artist(self.ax0.patch)
