@@ -53,32 +53,26 @@ class DistanceTransform:
       # if free_space:
       #   return result
 
-  def nhood4(self, x, y):
+  def layer_nhood4(self, x, y, current_layer):
     result = []
 
     if x >= 1 and self.dist_grid[x-1, y] != -1:
-      result.append((x - 1, y))
+      result.append((x - 1, y, current_layer))
 
     if x < self.dist_grid.size_x - 1 and self.dist_grid[x+1, y] != -1:
-      result.append((x + 1, y))
+      result.append((x + 1, y, current_layer))
 
     if y >= 1 and self.dist_grid[x, y-1] != -1:
-      result.append((x, y - 1))
+      result.append((x, y - 1, current_layer))
 
     if y < self.dist_grid.size_y - 1 and self.dist_grid[x, y+1] != -1:
-      result.append((x, y + 1))
+      result.append((x, y + 1, current_layer))
 
-    # if x >= 1 and y >= 1 and self.dist_grid[x-1, y-1] != -1:
-    #   result.append((x - 1, y - 1))
-
-    # if x >= 1 and y < self.dist_grid.size_y - 1 and self.dist_grid[x-1, y+1] != -1:
-    #   result.append((x - 1, y + 1))
-
-    # if x < self.dist_grid.size_x - 1 and y >= 1 and self.dist_grid[x+1, y-1] != -1:
-    #   result.append((x + 1, y - 1))
-
-    # if x < self.dist_grid.size_x - 1 and y < self.dist_grid.size_y - 1 and self.dist_grid[x+1, y+1] != -1:
-    #   result.append((x + 1, y + 1))
+    next_layer = (current_layer + 1) % 8
+    prev_layer = (current_layer - 1) % 8
+    
+    result.append((x, y, next_layer))
+    result.append((x, y, prev_layer))
 
     return result
 
@@ -318,64 +312,67 @@ class DistanceTransform:
 
     return None
 
-  def moveToUnvisited(self, current_pos, current_layer):
+  def moveToUnvisited(self, start_pos, start_layer):
     bfs = deque()
-    bfs.append((current_pos, current_layer))
-    visited = set()
-    prev = dict()
-    dist = defaultdict(lambda : float('inf'))
+    bfs.append((start_pos, start_layer))
 
-    dist[current_pos] = 0
-    prev[current_pos] = None
+    visited = [set() for i in range(8)]
+    prev = [dict() for i in range(8)]
+    dist =  [defaultdict(lambda: float('inf')) for i in range(8)]
+
+    dist[start_layer][start_pos] = 0
+    prev[start_layer][start_pos] = None
+
+    count = 0
 
     while len(bfs) > 0:
-      current_pos, current_layer = bfs.pop()
+      count += 1
+      current_pos, current_layer = bfs.popleft()
 
-      if current_pos in visited:
+      if current_pos in visited[current_layer]:
         continue
       else:
-        visited.add(current_pos)
+        visited[current_layer].add(current_pos)
 
-      for nbr in self.nhood4(*current_pos):
-        next_layer = self.getNextLayer(current_pos, current_layer, nbr)
+      for nbr_x, nbr_y, nbr_layer in self.layer_nhood4(*current_pos, current_layer):
+        nbr = (nbr_x, nbr_y)
 
-        # If no movement to nbr exists skip
-        if next_layer == None:
+        # Skip if nbr not free
+        if self.oriented_occ_grid[nbr] & 2**nbr_layer != 0:
           continue
 
         # If we found a nonzero space then return the path to here
         if self.dist_grid[nbr] != 0:
-          path = [(nbr, next_layer), (current_pos, current_layer)]
+          path = [(nbr, nbr_layer), (current_pos, current_layer)]
 
           pos = current_pos
           layer = current_layer
 
-          while prev[pos] != None:
-            next_pos, layer = prev[pos]
-            path.append((next_pos, layer))
+          while prev[layer][pos] != None:
+            next_pos, next_layer = prev[layer][pos]
+            path.append((next_pos, next_layer))
             pos = next_pos
+            layer = next_layer
 
           return path[::-1]
 
-          
+        new_dist = 1 + dist[current_layer][current_pos]
 
-        new_dist = 1 + dist[current_pos]
+        if new_dist < dist[nbr_layer][nbr]:
+          dist[nbr_layer][nbr] = new_dist
+          prev[nbr_layer][nbr] = (current_pos, current_layer)
 
-        if new_dist < dist[nbr]:
-          dist[nbr] = new_dist
-          prev[nbr] = (current_pos, current_layer)
+        bfs.append((nbr,nbr_layer))
 
-        bfs.append((nbr,next_layer))
-    
     return []
         
-  def getPath(self):
+  def getPath(self, start=None):
     # Compute configuration space
     self.computeCSpace()
 
-    # TODO: Not the best way to do this -> want to start at most explorable point
-    # Generate a random start point within the cspace
-    start = self.generateRandomStart()
+    # Generate a random start point within the cspace if no startpoint given
+    if start is None:
+      start = self.generateRandomStart()
 
     # Compute distance grid
     self.computeDistances(start)
@@ -394,36 +391,27 @@ class DistanceTransform:
       occupied_layers = occupied_layers >> 1
 
     path = []
-    c = 0
-
+    
     # Follow the path of min cost
     while True:
-      current_cost = self.dist_grid[current_pos]
 
       min_cost = float('inf')
       best_next_pos = None
       best_next_layer = None
 
-      for nbr in self.nhood4(*current_pos):
+      for nbr_x, nbr_y, nbr_layer in self.layer_nhood4(*current_pos, current_layer):
+        nbr = (nbr_x, nbr_y)
+
+        if self.oriented_occ_grid[nbr] & 2**nbr_layer != 0:
+          continue
         
         if self.dist_grid[nbr] > 0 and self.dist_grid[nbr] < min_cost:
-          next_layer = self.getNextLayer(current_pos, current_layer, nbr)
-
-          if next_layer != None:
-            min_cost = self.dist_grid[nbr]
-            best_next_pos = nbr
-            best_next_layer = next_layer
+          min_cost = self.dist_grid[nbr]
+          best_next_pos = nbr
+          best_next_layer = nbr_layer
 
       path.append((current_pos, current_layer))
       self.dist_grid[current_pos] = 0
-
-
-      c += 1
-      if c > 20:
-        plt.imshow(masked_dist_grid)
-        plt.pause(0.001)
-        plt.clf()
-        c = 0
 
       # If the surrounding cells are all 0 (i.e. visited) then look to move to next best area
       if best_next_pos == None:
